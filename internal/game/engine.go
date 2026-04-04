@@ -527,38 +527,26 @@ func (e *Engine) generateToolNarrative(toolName string, args map[string]interfac
 	// 添加明显的工具调用标记
 	sb.WriteString("\n")
 	sb.WriteString("╔════════════════════════════════════════════════════════════════╗\n")
-	sb.WriteString(fmt.Sprintf("║  ⚙️  工具调用: %-48s║\n", toolName))
+	sb.WriteString(fmt.Sprintf("⚙️  工具调用: %s\n", toolName))
 	sb.WriteString("╠════════════════════════════════════════════════════════════════╣\n")
 
 	// 生成叙述标题
-	sb.WriteString("║  ")
 	sb.WriteString(statusMarker)
 	sb.WriteString(getToolNarrativeHeader(toolName, toolCategory))
 	sb.WriteString("\n")
 
-	// 根据工具类型生成不同的叙述内容（带前缀）
-	narrativeContent := ""
+	// 根据工具类型生成不同的叙述内容
 	switch toolCategory {
 	case "dice":
-		narrativeContent = generateDiceNarrative(toolName, args, result, execErr)
+		sb.WriteString(generateDiceNarrative(toolName, args, result, execErr))
 	case "character":
-		narrativeContent = generateCharacterNarrative(toolName, args, result, execErr)
+		sb.WriteString(generateCharacterNarrative(toolName, args, result, execErr))
 	case "item":
-		narrativeContent = generateItemNarrative(toolName, args, result, execErr)
+		sb.WriteString(generateItemNarrative(toolName, args, result, execErr))
 	case "world":
-		narrativeContent = generateWorldNarrative(toolName, args, result, execErr)
+		sb.WriteString(generateWorldNarrative(toolName, args, result, execErr))
 	default:
-		narrativeContent = generateGenericNarrative(toolName, args, result, execErr)
-	}
-
-	// 为每行添加边框前缀
-	lines := strings.Split(narrativeContent, "\n")
-	for _, line := range lines {
-		if line != "" {
-			sb.WriteString("║  ")
-			sb.WriteString(line)
-			sb.WriteString("\n")
-		}
+		sb.WriteString(generateGenericNarrative(toolName, args, result, execErr))
 	}
 
 	sb.WriteString("╚════════════════════════════════════════════════════════════════╝\n")
