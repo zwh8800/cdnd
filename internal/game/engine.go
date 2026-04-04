@@ -227,8 +227,10 @@ func (e *Engine) ProcessPlayerInput(ctx context.Context, input string) (*DMRespo
 		return nil, fmt.Errorf("LLM调用失败: %w", err)
 	}
 	e.state.AddHistory(llm.Message{Role: llm.RoleUser, Content: input})
-	e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: resp.Content})
-	return &DMResponse{Content: resp.Content, Phase: e.state.GetPhase()}, nil
+	// 解析颜色标记，将标记转换为ANSI颜色代码
+	coloredContent := prompt.ParseColorMarkers(resp.Content)
+	e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: coloredContent})
+	return &DMResponse{Content: coloredContent, Phase: e.state.GetPhase()}, nil
 }
 
 // ProcessWithTools 使用Tool Call处理玩家输入
@@ -288,9 +290,11 @@ func (e *Engine) ProcessWithTools(ctx context.Context, input string) (*DMRespons
 		if len(resp.ToolCalls) == 0 {
 			// 没有工具调用，返回最终响应
 			e.state.AddHistory(llm.Message{Role: llm.RoleUser, Content: input})
-			e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: resp.Content})
+			// 解析颜色标记，将标记转换为ANSI颜色代码
+			coloredContent := prompt.ParseColorMarkers(resp.Content)
+			e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: coloredContent})
 			return &DMResponse{
-				Content:        resp.Content,
+				Content:        coloredContent,
 				Phase:          e.state.GetPhase(),
 				ToolCalls:      allToolCalls,
 				ToolNarratives: allNarratives,
@@ -503,9 +507,10 @@ func (e *Engine) ProcessPlayerInputStream(ctx context.Context, input string) (<-
 			}
 
 			if chunk.Done {
-				// 流式完成，保存完整响应到历史
+				// 流式完成，解析颜色标记后保存完整响应到历史
 				e.mu.Lock()
-				e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: fullContent.String()})
+				coloredContent := prompt.ParseColorMarkers(fullContent.String())
+				e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: coloredContent})
 				e.mu.Unlock()
 
 				outputChan <- StreamChunk{Done: true}

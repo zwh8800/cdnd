@@ -2,12 +2,51 @@ package prompt
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/zwh8800/cdnd/internal/character"
 	"github.com/zwh8800/cdnd/internal/llm"
 	"github.com/zwh8800/cdnd/internal/world"
 )
+
+// ColorMarkerStyles 定义颜色标记与lipgloss样式的映射
+var ColorMarkerStyles = map[string]lipgloss.Style{
+	"number":  lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575")),              // 绿色
+	"keyword": lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4")),              // 紫色
+	"status":  lipgloss.NewStyle().Foreground(lipgloss.Color("#FFD93D")),              // 黄色
+	"combat":  lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6B6B")).Bold(true),   // 红色加粗
+	"success": lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575")).Bold(true),   // 绿色加粗
+	"danger":  lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6B6B")).Bold(true),   // 红色加粗
+	"quote":   lipgloss.NewStyle().Foreground(lipgloss.Color("#5C5CFF")).Italic(true), // 浅紫色斜体
+}
+
+// colorMarkerRegex 匹配颜色标记的正则表达式
+var colorMarkerRegex = regexp.MustCompile(`\{\{(\w+):([^}]+)\}\}`)
+
+// ParseColorMarkers 将文本中的颜色标记转换为带样式的文本
+// 支持的标记：{{number:值}}, {{keyword:值}}, {{status:值}}, {{combat:值}}, {{success:值}}, {{danger:值}}, {{quote:值}}
+func ParseColorMarkers(text string) string {
+	return colorMarkerRegex.ReplaceAllStringFunc(text, func(match string) string {
+		// 提取标记类型和内容
+		submatches := colorMarkerRegex.FindStringSubmatch(match)
+		if len(submatches) != 3 {
+			return match
+		}
+
+		markerType := submatches[1]
+		content := submatches[2]
+
+		// 查找对应的样式
+		if style, exists := ColorMarkerStyles[markerType]; exists {
+			return style.Render(content)
+		}
+
+		// 未知标记类型，返回原始内容
+		return content
+	})
+}
 
 // Builder 提示词构建器
 type Builder struct {
