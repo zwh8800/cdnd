@@ -42,10 +42,7 @@ func (p *OpenAIProvider) Name() string {
 func (p *OpenAIProvider) Generate(ctx context.Context, req *Request) (*Response, error) {
 	messages := make([]openai.ChatCompletionMessage, len(req.Messages))
 	for i, msg := range req.Messages {
-		messages[i] = openai.ChatCompletionMessage{
-			Role:    string(msg.Role),
-			Content: msg.Content,
-		}
+		messages[i] = p.convertMessage(msg)
 	}
 
 	model := req.Model
@@ -63,12 +60,33 @@ func (p *OpenAIProvider) Generate(ctx context.Context, req *Request) (*Response,
 		temp = p.temperature
 	}
 
-	resp, err := p.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+	// 构建请求
+	chatRequest := openai.ChatCompletionRequest{
 		Model:       model,
 		Messages:    messages,
 		MaxTokens:   maxTokens,
 		Temperature: float32(temp),
-	})
+	}
+
+	// 添加工具定义
+	if len(req.Tools) > 0 {
+		chatRequest.Tools = make([]openai.Tool, len(req.Tools))
+		for i, tool := range req.Tools {
+			chatRequest.Tools[i] = openai.Tool{
+				Type: openai.ToolTypeFunction,
+				Function: &openai.FunctionDefinition{
+					Name:        tool.Function.Name,
+					Description: tool.Function.Description,
+					Parameters:  tool.Function.Parameters,
+				},
+			}
+		}
+		if req.ToolChoice != nil {
+			chatRequest.ToolChoice = req.ToolChoice
+		}
+	}
+
+	resp, err := p.client.CreateChatCompletion(ctx, chatRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -77,26 +95,40 @@ func (p *OpenAIProvider) Generate(ctx context.Context, req *Request) (*Response,
 		return nil, errors.New("no response choices returned")
 	}
 
-	return &Response{
-		ID:      resp.ID,
-		Content: resp.Choices[0].Message.Content,
-		Model:   resp.Model,
+	// 解析响应
+	response := &Response{
+		ID:           resp.ID,
+		Content:      resp.Choices[0].Message.Content,
+		Model:        resp.Model,
+		FinishReason: string(resp.Choices[0].FinishReason),
 		Usage: Usage{
 			PromptTokens:     resp.Usage.PromptTokens,
 			CompletionTokens: resp.Usage.CompletionTokens,
 			TotalTokens:      resp.Usage.TotalTokens,
 		},
-	}, nil
+	}
+
+	// 解析工具调用
+	if len(resp.Choices[0].Message.ToolCalls) > 0 {
+		response.ToolCalls = make([]ToolCall, len(resp.Choices[0].Message.ToolCalls))
+		for i, tc := range resp.Choices[0].Message.ToolCalls {
+			response.ToolCalls[i] = ToolCall{
+				ID:        tc.ID,
+				Type:      string(tc.Type),
+				Name:      tc.Function.Name,
+				Arguments: tc.Function.Arguments,
+			}
+		}
+	}
+
+	return response, nil
 }
 
 // GenerateStream 生成流式补全。
 func (p *OpenAIProvider) GenerateStream(ctx context.Context, req *Request) (<-chan StreamChunk, error) {
 	messages := make([]openai.ChatCompletionMessage, len(req.Messages))
 	for i, msg := range req.Messages {
-		messages[i] = openai.ChatCompletionMessage{
-			Role:    string(msg.Role),
-			Content: msg.Content,
-		}
+		messages[i] = p.convertMessage(msg)
 	}
 
 	model := req.Model
@@ -114,13 +146,34 @@ func (p *OpenAIProvider) GenerateStream(ctx context.Context, req *Request) (<-ch
 		temp = p.temperature
 	}
 
-	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
+	// 构建请求
+	chatRequest := openai.ChatCompletionRequest{
 		Model:       model,
 		Messages:    messages,
 		MaxTokens:   maxTokens,
 		Temperature: float32(temp),
 		Stream:      true,
-	})
+	}
+
+	// 添加工具定义
+	if len(req.Tools) > 0 {
+		chatRequest.Tools = make([]openai.Tool, len(req.Tools))
+		for i, tool := range req.Tools {
+			chatRequest.Tools[i] = openai.Tool{
+				Type: openai.ToolTypeFunction,
+				Function: &openai.FunctionDefinition{
+					Name:        tool.Function.Name,
+					Description: tool.Function.Description,
+					Parameters:  tool.Function.Parameters,
+				},
+			}
+		}
+		if req.ToolChoice != nil {
+			chatRequest.ToolChoice = req.ToolChoice
+		}
+	}
+
+	stream, err := p.client.CreateChatCompletionStream(ctx, chatRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -143,9 +196,13 @@ func (p *OpenAIProvider) GenerateStream(ctx context.Context, req *Request) (<-ch
 			}
 
 			if len(response.Choices) > 0 {
-				chunkChan <- StreamChunk{
+				chunk := StreamChunk{
 					Content: response.Choices[0].Delta.Content,
 				}
+				if response.Choices[0].FinishReason != "" {
+					chunk.FinishReason = string(response.Choices[0].FinishReason)
+				}
+				chunkChan <- chunk
 			}
 		}
 	}()
@@ -166,4 +223,34 @@ func (p *OpenAIProvider) SetMaxTokens(maxTokens int) {
 // SetTemperature 设置生成的温度。
 func (p *OpenAIProvider) SetTemperature(temp float64) {
 	p.temperature = temp
+}
+
+// convertMessage 将 llm.Message 转换为 openai.ChatCompletionMessage
+func (p *OpenAIProvider) convertMessage(msg Message) openai.ChatCompletionMessage {
+	om := openai.ChatCompletionMessage{
+		Role:    string(msg.Role),
+		Content: msg.Content,
+	}
+
+	// 处理 tool 角色消息
+	if msg.Role == RoleTool {
+		om.ToolCallID = msg.ToolCallID
+	}
+
+	// 处理 assistant 消息中的工具调用
+	if len(msg.ToolCalls) > 0 {
+		om.ToolCalls = make([]openai.ToolCall, len(msg.ToolCalls))
+		for i, tc := range msg.ToolCalls {
+			om.ToolCalls[i] = openai.ToolCall{
+				ID:   tc.ID,
+				Type: openai.ToolTypeFunction,
+				Function: openai.FunctionCall{
+					Name:      tc.Name,
+					Arguments: tc.Arguments,
+				},
+			}
+		}
+	}
+
+	return om
 }

@@ -2,6 +2,7 @@ package game
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -188,29 +189,130 @@ func (e *Engine) ProcessPlayerInput(ctx context.Context, input string) (*DMRespo
 }
 
 // ProcessWithTools 使用Tool Call处理玩家输入
+// 实现完整的 Agentic Loop：调用LLM -> 执行工具 -> 反馈结果 -> 循环
 func (e *Engine) ProcessWithTools(ctx context.Context, input string) (*DMResponse, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.state.IncrementTurn()
+
+	// 1. 获取工具定义并转换为 LLM 格式
+	toolDefs := e.toolRegistry.GetToolDefinitions()
+	llmToolDefs := make([]llm.ToolDefinition, len(toolDefs))
+	for i, td := range toolDefs {
+		llmToolDefs[i] = llm.ToolDefinition{
+			Type: td.Type,
+			Function: llm.ToolFunctionDefinition{
+				Name:        td.Function.Name,
+				Description: td.Function.Description,
+				Parameters:  td.Function.Parameters,
+			},
+		}
+	}
+
+	// 2. 构建初始消息
 	gameCtx := &prompt.GameContext{
-		Phase:        e.state.GetPhase().String(),
-		Character:    e.state.GetCharacter(),
-		CurrentScene: e.state.GetCurrentScene(),
-		DMContext:    e.state.DMContext,
-		History:      e.state.GetHistory(),
-		TurnCount:    e.state.TurnCount,
+		Phase:         e.state.GetPhase().String(),
+		Character:     e.state.GetCharacter(),
+		CurrentScene:  e.state.GetCurrentScene(),
+		DMContext:     e.state.DMContext,
+		History:       e.state.GetHistory(),
+		TurnCount:     e.state.TurnCount,
+		WorldFlags:    e.state.WorldFlags,
+		WorldCounters: e.state.WorldCounters,
 	}
 	systemPrompt := e.prompt.BuildSystemPrompt(gameCtx)
 	messages := []llm.Message{{Role: llm.RoleSystem, Content: systemPrompt}}
 	messages = append(messages, e.prompt.BuildHistoryContext(e.state.GetHistory(), 20)...)
 	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: input})
-	resp, err := e.llmProvider.Generate(ctx, &llm.Request{Messages: messages})
-	if err != nil {
-		return nil, err
+
+	// 3. Agentic Loop (最多10次迭代)
+	const maxIterations = 10
+	var allToolCalls []tools.ToolCall
+
+	for i := 0; i < maxIterations; i++ {
+		// 3.1 调用 LLM
+		resp, err := e.llmProvider.Generate(ctx, &llm.Request{
+			Messages:   messages,
+			Tools:      llmToolDefs,
+			ToolChoice: "auto",
+		})
+		if err != nil {
+			return nil, fmt.Errorf("LLM调用失败: %w", err)
+		}
+
+		// 3.2 检查是否有工具调用
+		if len(resp.ToolCalls) == 0 {
+			// 没有工具调用，返回最终响应
+			e.state.AddHistory(llm.Message{Role: llm.RoleUser, Content: input})
+			e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: resp.Content})
+			return &DMResponse{
+				Content:   resp.Content,
+				Phase:     e.state.GetPhase(),
+				ToolCalls: allToolCalls,
+			}, nil
+		}
+
+		// 3.3 添加 assistant 消息（包含工具调用）
+		assistantMsg := llm.Message{
+			Role:      llm.RoleAssistant,
+			Content:   resp.Content,
+			ToolCalls: resp.ToolCalls,
+		}
+		messages = append(messages, assistantMsg)
+
+		// 3.4 执行所有工具调用并添加结果消息
+		for _, tc := range resp.ToolCalls {
+			// 解析参数
+			var args map[string]interface{}
+			if tc.Arguments != "" {
+				if err := json.Unmarshal([]byte(tc.Arguments), &args); err != nil {
+					args = make(map[string]interface{})
+				}
+			} else {
+				args = make(map[string]interface{})
+			}
+
+			// 打印工具执行前的分隔线
+			fmt.Println("\n┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓")
+
+			// 执行工具
+			result, err := e.toolRegistry.Execute(ctx, tc.Name, args)
+
+			// 生成并打印 D&D 风格叙述
+			narrative := e.generateToolNarrative(tc.Name, args, result, err)
+			fmt.Print(narrative)
+
+			// 打印结束分隔线
+			fmt.Println("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛")
+
+			// 分发工具执行事件
+			e.events.Dispatch(Event{
+				Type:    EventToolExecuted,
+				Target:  tc.ID,
+				Data:    map[string]interface{}{"tool": tc.Name, "args": args, "result": result, "error": err},
+				Message: narrative,
+			})
+
+			// 记录工具调用
+			allToolCalls = append(allToolCalls, tools.ToolCall{
+				ID:        tc.ID,
+				Name:      tc.Name,
+				Arguments: args,
+			})
+
+			// 添加工具结果消息
+			toolMsg := llm.Message{
+				Role:       llm.RoleTool,
+				Content:    formatToolResult(result, err),
+				ToolCallID: tc.ID,
+				Name:       tc.Name,
+			}
+			messages = append(messages, toolMsg)
+		}
 	}
-	e.state.AddHistory(llm.Message{Role: llm.RoleUser, Content: input})
-	e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: resp.Content})
-	return &DMResponse{Content: resp.Content, Phase: e.state.GetPhase()}, nil
+
+	// 超过最大迭代次数，返回错误
+	return nil, fmt.Errorf("工具调用超过最大迭代次数 (%d)", maxIterations)
 }
 
 // buildMessages 构建LLM消息
@@ -377,4 +479,336 @@ func (e *Engine) ProcessPlayerInputStream(ctx context.Context, input string) (<-
 	}()
 
 	return outputChan, nil
+}
+
+// formatToolResult 格式化工具执行结果为消息内容
+func formatToolResult(result *tools.ToolResult, err error) string {
+	if err != nil {
+		return fmt.Sprintf("工具执行错误: %s", err.Error())
+	}
+	if result == nil {
+		return "工具执行完成（无结果）"
+	}
+
+	var sb strings.Builder
+	if result.Success {
+		sb.WriteString("成功: ")
+	} else {
+		sb.WriteString("失败: ")
+	}
+
+	if result.Narrative != "" {
+		sb.WriteString(result.Narrative)
+	}
+
+	if result.Error != "" {
+		sb.WriteString(" [")
+		sb.WriteString(result.Error)
+		sb.WriteString("]")
+	}
+
+	return sb.String()
+}
+
+// generateToolNarrative 生成D&D风格的工具执行叙述
+func (e *Engine) generateToolNarrative(toolName string, args map[string]interface{}, result *tools.ToolResult, execErr error) string {
+	var sb strings.Builder
+
+	// 获取工具类型分类
+	toolCategory := getToolCategory(toolName)
+
+	// 根据结果状态添加视觉标记
+	var statusMarker string
+	if execErr != nil {
+		statusMarker = "❌ "
+	} else if result != nil && result.Success {
+		statusMarker = "✅ "
+	} else {
+		statusMarker = "⚠️ "
+	}
+
+	// 生成叙述标题
+	sb.WriteString(statusMarker)
+	sb.WriteString(getToolNarrativeHeader(toolName, toolCategory))
+	sb.WriteString("\n")
+
+	// 根据工具类型生成不同的叙述内容
+	switch toolCategory {
+	case "dice":
+		sb.WriteString(generateDiceNarrative(toolName, args, result, execErr))
+	case "character":
+		sb.WriteString(generateCharacterNarrative(toolName, args, result, execErr))
+	case "item":
+		sb.WriteString(generateItemNarrative(toolName, args, result, execErr))
+	case "world":
+		sb.WriteString(generateWorldNarrative(toolName, args, result, execErr))
+	default:
+		sb.WriteString(generateGenericNarrative(toolName, args, result, execErr))
+	}
+
+	return sb.String()
+}
+
+// getToolCategory 获取工具类型分类
+func getToolCategory(toolName string) string {
+	switch toolName {
+	case "roll_dice", "skill_check", "saving_throw":
+		return "dice"
+	case "deal_damage", "heal_character", "add_condition", "remove_condition":
+		return "character"
+	case "add_item", "remove_item", "spend_gold", "gain_gold":
+		return "item"
+	case "move_to_scene", "spawn_npc", "remove_npc", "set_flag", "get_flag":
+		return "world"
+	default:
+		return "generic"
+	}
+}
+
+// getToolNarrativeHeader 获取工具叙述标题
+func getToolNarrativeHeader(toolName, category string) string {
+	headers := map[string]string{
+		"roll_dice":        "🎲 骰子滚动",
+		"skill_check":      "🎯 技能检定",
+		"saving_throw":     "🛡️ 豁免检定",
+		"deal_damage":      "⚔️ 造成伤害",
+		"heal_character":   "💚 治疗恢复",
+		"add_condition":    "🔮 施加状态",
+		"remove_condition": "✨ 移除状态",
+		"add_item":         "📦 获得物品",
+		"remove_item":      "📤 失去物品",
+		"spend_gold":       "💰 消耗金币",
+		"gain_gold":        "💎 获得金币",
+		"move_to_scene":    "🚶 场景转换",
+		"spawn_npc":        "👤 NPC出现",
+		"remove_npc":       "👥 NPC消失",
+		"set_flag":         "🏁 设置标记",
+		"get_flag":         "🔍 查询标记",
+	}
+	if header, ok := headers[toolName]; ok {
+		return header
+	}
+	return "⚙️ " + toolName
+}
+
+// generateDiceNarrative 生成骰子类工具叙述
+func generateDiceNarrative(toolName string, args map[string]interface{}, result *tools.ToolResult, execErr error) string {
+	var sb strings.Builder
+
+	if execErr != nil {
+		sb.WriteString("  └─ 骰子投掷出现异常，命运之轮暂时停滞...\n")
+		return sb.String()
+	}
+
+	if result == nil {
+		return "  └─ 骰子滚动...\n"
+	}
+
+	// 提取骰子结果信息
+	if data, ok := result.Data.(map[string]interface{}); ok {
+		if total, ok := data["total"].(float64); ok {
+			if toolName == "skill_check" || toolName == "saving_throw" {
+				var dc int
+				if dcVal, ok := data["dc"].(float64); ok {
+					dc = int(dcVal)
+				}
+				if result.Success {
+					sb.WriteString(fmt.Sprintf("  └─ 🎉 检定成功！投出 %d (DC %d)\n", int(total), dc))
+					sb.WriteString("     命运眷顾着这位冒险者...\n")
+				} else {
+					sb.WriteString(fmt.Sprintf("  └─ 💔 检定失败。投出 %d (DC %d)\n", int(total), dc))
+					sb.WriteString("     命运之线似乎在此时断裂...\n")
+				}
+			} else {
+				sb.WriteString(fmt.Sprintf("  └─ 骰子落地：**%d**\n", int(total)))
+			}
+		}
+	} else if result.Narrative != "" {
+		sb.WriteString(fmt.Sprintf("  └─ %s\n", result.Narrative))
+	}
+
+	return sb.String()
+}
+
+// generateCharacterNarrative 生成角色类工具叙述
+func generateCharacterNarrative(toolName string, args map[string]interface{}, result *tools.ToolResult, execErr error) string {
+	var sb strings.Builder
+
+	if execErr != nil {
+		sb.WriteString(fmt.Sprintf("  └─ ⚡ 能量波动，%s 失败...\n", toolName))
+		return sb.String()
+	}
+
+	if result == nil {
+		return "  └─ 角色状态变化中...\n"
+	}
+
+	switch toolName {
+	case "deal_damage":
+		if amount, ok := args["amount"].(float64); ok {
+			if result.Success {
+				sb.WriteString(fmt.Sprintf("  └─ ⚔️ 造成了 %d 点伤害！\n", int(amount)))
+				sb.WriteString("     伤口鲜血直流，痛苦的呻吟回荡在空气中...\n")
+			} else {
+				sb.WriteString("  └─ 攻击未能造成有效伤害\n")
+			}
+		}
+	case "heal_character":
+		if amount, ok := args["amount"].(float64); ok {
+			if result.Success {
+				sb.WriteString(fmt.Sprintf("  └─ 💚 恢复了 %d 点生命值！\n", int(amount)))
+				sb.WriteString("     神圣的光芒笼罩全身，伤口开始愈合...\n")
+			} else {
+				sb.WriteString("  └─ 治疗效果未能生效\n")
+			}
+		}
+	case "add_condition":
+		if condition, ok := args["condition"].(string); ok {
+			if result.Success {
+				sb.WriteString(fmt.Sprintf("  └─ 🔮 被施加了【%s】状态！\n", condition))
+				sb.WriteString("     诡异的力量缠绕着身体，状态发生了改变...\n")
+			}
+		}
+	case "remove_condition":
+		if condition, ok := args["condition"].(string); ok {
+			if result.Success {
+				sb.WriteString(fmt.Sprintf("  └─ ✨ 【%s】状态已被移除！\n", condition))
+				sb.WriteString("     压抑的感觉逐渐消散，力量重新涌动...\n")
+			}
+		}
+	default:
+		if result.Narrative != "" {
+			sb.WriteString(fmt.Sprintf("  └─ %s\n", result.Narrative))
+		}
+	}
+
+	return sb.String()
+}
+
+// generateItemNarrative 生成物品类工具叙述
+func generateItemNarrative(toolName string, args map[string]interface{}, result *tools.ToolResult, execErr error) string {
+	var sb strings.Builder
+
+	if execErr != nil {
+		sb.WriteString("  └─ 物品操作失败...\n")
+		return sb.String()
+	}
+
+	if result == nil {
+		return "  └─ 物品状态变化中...\n"
+	}
+
+	switch toolName {
+	case "add_item":
+		if itemName, ok := args["item_name"].(string); ok {
+			if result.Success {
+				sb.WriteString(fmt.Sprintf("  └─ 📦 获得了【%s】！\n", itemName))
+				sb.WriteString("     物品被小心翼翼地收入囊中...\n")
+			}
+		}
+	case "remove_item":
+		if itemName, ok := args["item_name"].(string); ok {
+			if result.Success {
+				sb.WriteString(fmt.Sprintf("  └─ 📤 失去了【%s】\n", itemName))
+				sb.WriteString("     物品从背包中消失了...\n")
+			}
+		}
+	case "spend_gold":
+		if amount, ok := args["amount"].(float64); ok {
+			if result.Success {
+				sb.WriteString(fmt.Sprintf("  └─ 💰 支付了 %d 枚金币\n", int(amount)))
+				sb.WriteString("     金币叮当作响，交易完成...\n")
+			} else {
+				sb.WriteString("  └─ 💰 金币不足，交易失败\n")
+			}
+		}
+	case "gain_gold":
+		if amount, ok := args["amount"].(float64); ok {
+			if result.Success {
+				sb.WriteString(fmt.Sprintf("  └─ 💎 获得了 %d 枚金币！\n", int(amount)))
+				sb.WriteString("     金币落入钱袋，发出悦耳的声音...\n")
+			}
+		}
+	default:
+		if result.Narrative != "" {
+			sb.WriteString(fmt.Sprintf("  └─ %s\n", result.Narrative))
+		}
+	}
+
+	return sb.String()
+}
+
+// generateWorldNarrative 生成世界类工具叙述
+func generateWorldNarrative(toolName string, args map[string]interface{}, result *tools.ToolResult, execErr error) string {
+	var sb strings.Builder
+
+	if execErr != nil {
+		sb.WriteString("  └─ 世界发生了某种奇异的扰动...\n")
+		return sb.String()
+	}
+
+	if result == nil {
+		return "  └─ 世界正在变化...\n"
+	}
+
+	switch toolName {
+	case "move_to_scene":
+		if sceneID, ok := args["scene_id"].(string); ok {
+			if result.Success {
+				sb.WriteString(fmt.Sprintf("  └─ 🚶 进入场景【%s】\n", sceneID))
+				sb.WriteString("     环境开始模糊，新的景象逐渐显现...\n")
+			}
+		}
+	case "spawn_npc":
+		if npcName, ok := args["npc_name"].(string); ok {
+			if result.Success {
+				sb.WriteString(fmt.Sprintf("  └─ 👤 【%s】出现了！\n", npcName))
+				sb.WriteString("     一个身影从阴影中显现...\n")
+			}
+		}
+	case "remove_npc":
+		if npcID, ok := args["npc_id"].(string); ok {
+			if result.Success {
+				sb.WriteString(fmt.Sprintf("  └─ 👥 【%s】离开了\n", npcID))
+				sb.WriteString("     身影渐渐消失在远处...\n")
+			}
+		}
+	case "set_flag":
+		if flagKey, ok := args["flag_key"].(string); ok {
+			if result.Success {
+				sb.WriteString(fmt.Sprintf("  └─ 🏁 标记【%s】已设置\n", flagKey))
+				sb.WriteString("     世界记住了这个改变...\n")
+			}
+		}
+	case "get_flag":
+		if flagKey, ok := args["flag_key"].(string); ok {
+			if result.Success {
+				sb.WriteString(fmt.Sprintf("  └─ 🔍 查询标记【%s】\n", flagKey))
+			}
+		}
+	default:
+		if result.Narrative != "" {
+			sb.WriteString(fmt.Sprintf("  └─ %s\n", result.Narrative))
+		}
+	}
+
+	return sb.String()
+}
+
+// generateGenericNarrative 生成通用工具叙述
+func generateGenericNarrative(toolName string, args map[string]interface{}, result *tools.ToolResult, execErr error) string {
+	var sb strings.Builder
+
+	if execErr != nil {
+		sb.WriteString(fmt.Sprintf("  └─ %s 执行失败\n", toolName))
+		return sb.String()
+	}
+
+	if result != nil && result.Narrative != "" {
+		sb.WriteString(fmt.Sprintf("  └─ %s\n", result.Narrative))
+	} else {
+		sb.WriteString(fmt.Sprintf("  └─ %s 执行完成\n", toolName))
+	}
+
+	return sb.String()
 }

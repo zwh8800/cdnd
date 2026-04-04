@@ -40,6 +40,8 @@ const (
 	EventQuestAdded
 	EventQuestUpdated
 	EventQuestCompleted
+	// 工具事件
+	EventToolExecuted
 	// 系统事件
 	EventGameSaved
 	EventGameLoaded
@@ -102,6 +104,8 @@ func (e EventType) String() string {
 		return "任务更新"
 	case EventQuestCompleted:
 		return "任务完成"
+	case EventToolExecuted:
+		return "工具执行"
 	case EventGameSaved:
 		return "游戏保存"
 	case EventGameLoaded:

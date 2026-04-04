@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -38,83 +39,20 @@ func (p *AnthropicProvider) Name() string {
 }
 
 // Generate 为给定请求生成补全。
-// 注意：此实现需要正确的 SDK 集成。
-// Anthropic SDK 有特定的参数类型需要匹配。
 func (p *AnthropicProvider) Generate(ctx context.Context, req *Request) (*Response, error) {
-	// 构建消息
-	messages := make([]anthropic.MessageParam, 0, len(req.Messages))
-
-	for _, msg := range req.Messages {
-		switch msg.Role {
-		case RoleUser:
-			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(msg.Content)))
-		case RoleAssistant:
-			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Content)))
-		// 系统消息在新 SDK 中以不同方式处理
-		case RoleSystem:
-			// 系统提示需要单独添加到参数中
-		}
-	}
-
-	model := req.Model
-	if model == "" {
-		model = p.model
-	}
-
-	maxTokens := int64(req.MaxTokens)
-	if maxTokens == 0 {
-		maxTokens = int64(p.maxTokens)
-	}
-
-	// 正确使用 SDK 的参数类型
-	params := anthropic.MessageNewParams{
-		MaxTokens: maxTokens,
-		Messages:  messages,
-	}
-
-	// 设置模型
-	if model != "" {
-		params.Model = model
-	}
-
-	message, err := p.client.Messages.New(ctx, params)
-	if err != nil {
-		return nil, err
-	}
-
-	// 提取文本内容
-	var content string
-	for _, block := range message.Content {
-		content += block.Text
-	}
-
-	return &Response{
-		ID:      message.ID,
-		Content: content,
-		Model:   message.Model,
-		Usage: Usage{
-			PromptTokens:     int(message.Usage.InputTokens),
-			CompletionTokens: int(message.Usage.OutputTokens),
-			TotalTokens:      int(message.Usage.InputTokens + message.Usage.OutputTokens),
-		},
-	}, nil
-}
-
-// GenerateStream 生成流式补全。
-func (p *AnthropicProvider) GenerateStream(ctx context.Context, req *Request) (<-chan StreamChunk, error) {
-	// 构建消息
 	messages := make([]anthropic.MessageParam, 0, len(req.Messages))
 	var systemPrompt string
 
 	for _, msg := range req.Messages {
 		switch msg.Role {
 		case RoleUser:
-			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(msg.Content)))
+			messages = append(messages, p.convertUserMessage(msg))
 		case RoleAssistant:
-			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Content)))
+			messages = append(messages, p.convertAssistantMessage(msg))
 		case RoleSystem:
-			// 系统消息在 Anthropic SDK 中单独处理
 			systemPrompt = msg.Content
+		case RoleTool:
+			messages = append(messages, p.convertToolResultMessage(msg))
 		}
 	}
 
@@ -128,7 +66,6 @@ func (p *AnthropicProvider) GenerateStream(ctx context.Context, req *Request) (<
 		maxTokens = int64(p.maxTokens)
 	}
 
-	// 构建流式请求参数
 	params := anthropic.MessageNewParams{
 		MaxTokens: maxTokens,
 		Messages:  messages,
@@ -139,9 +76,129 @@ func (p *AnthropicProvider) GenerateStream(ctx context.Context, req *Request) (<
 		params.System = []anthropic.TextBlockParam{{Text: systemPrompt}}
 	}
 
-	// 创建流式请求
-	stream := p.client.Messages.NewStreaming(ctx, params)
+	if len(req.Tools) > 0 {
+		tools := make([]anthropic.ToolUnionParam, len(req.Tools))
+		for i, tool := range req.Tools {
+			inputSchema := anthropic.ToolInputSchemaParam{
+				Properties: tool.Function.Parameters,
+			}
+			if req, ok := tool.Function.Parameters["required"].([]string); ok {
+				inputSchema.Required = req
+			}
 
+			toolParam := anthropic.ToolParam{
+				Name:        tool.Function.Name,
+				InputSchema: inputSchema,
+			}
+			if tool.Function.Description != "" {
+				toolParam.Description = anthropic.Opt(tool.Function.Description)
+			}
+			tools[i] = anthropic.ToolUnionParam{OfTool: &toolParam}
+		}
+		params.Tools = tools
+	}
+
+	message, err := p.client.Messages.New(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	response := &Response{
+		ID:    message.ID,
+		Model: message.Model,
+		Usage: Usage{
+			PromptTokens:     int(message.Usage.InputTokens),
+			CompletionTokens: int(message.Usage.OutputTokens),
+			TotalTokens:      int(message.Usage.InputTokens + message.Usage.OutputTokens),
+		},
+	}
+
+	for _, block := range message.Content {
+		switch block.Type {
+		case "text":
+			response.Content += block.Text
+		case "tool_use":
+			argsJSON, _ := json.Marshal(block.Input)
+			response.ToolCalls = append(response.ToolCalls, ToolCall{
+				ID:        block.ID,
+				Type:      "function",
+				Name:      block.Name,
+				Arguments: string(argsJSON),
+			})
+		}
+	}
+
+	switch message.StopReason {
+	case anthropic.StopReasonEndTurn:
+		response.FinishReason = "stop"
+	case anthropic.StopReasonToolUse:
+		response.FinishReason = "tool_calls"
+	}
+
+	return response, nil
+}
+
+// GenerateStream 生成流式补全。
+func (p *AnthropicProvider) GenerateStream(ctx context.Context, req *Request) (<-chan StreamChunk, error) {
+	messages := make([]anthropic.MessageParam, 0, len(req.Messages))
+	var systemPrompt string
+
+	for _, msg := range req.Messages {
+		switch msg.Role {
+		case RoleUser:
+			messages = append(messages, p.convertUserMessage(msg))
+		case RoleAssistant:
+			messages = append(messages, p.convertAssistantMessage(msg))
+		case RoleSystem:
+			systemPrompt = msg.Content
+		case RoleTool:
+			messages = append(messages, p.convertToolResultMessage(msg))
+		}
+	}
+
+	model := req.Model
+	if model == "" {
+		model = p.model
+	}
+
+	maxTokens := int64(req.MaxTokens)
+	if maxTokens == 0 {
+		maxTokens = int64(p.maxTokens)
+	}
+
+	msgParams := anthropic.MessageNewParams{
+		MaxTokens: maxTokens,
+		Messages:  messages,
+		Model:     model,
+	}
+
+	if systemPrompt != "" {
+		msgParams.System = []anthropic.TextBlockParam{{Text: systemPrompt}}
+	}
+
+	if len(req.Tools) > 0 {
+		tools := make([]anthropic.ToolUnionParam, len(req.Tools))
+		for i, tool := range req.Tools {
+			inputSchema := anthropic.ToolInputSchemaParam{
+				Properties: tool.Function.Parameters,
+			}
+			if req, ok := tool.Function.Parameters["required"].([]string); ok {
+				inputSchema.Required = req
+			}
+
+			toolParam := anthropic.ToolParam{
+				Name:        tool.Function.Name,
+				InputSchema: inputSchema,
+			}
+			if tool.Function.Description != "" {
+				toolParam.Description = anthropic.Opt(tool.Function.Description)
+			}
+			tools[i] = anthropic.ToolUnionParam{OfTool: &toolParam}
+		}
+		msgParams.Tools = tools
+	}
+
+	stream := p.client.Messages.NewStreaming(ctx, msgParams)
 	chunkChan := make(chan StreamChunk, 100)
 
 	go func() {
@@ -149,16 +206,11 @@ func (p *AnthropicProvider) GenerateStream(ctx context.Context, req *Request) (<
 
 		for stream.Next() {
 			event := stream.Current()
-
 			switch event.Type {
 			case "content_block_delta":
-				// 使用 AsContentBlockDelta 获取增量事件
 				delta := event.AsContentBlockDelta()
-				// 检查是否是文本增量
 				if delta.Delta.Type == "text_delta" {
-					chunkChan <- StreamChunk{
-						Content: delta.Delta.Text,
-					}
+					chunkChan <- StreamChunk{Content: delta.Delta.Text}
 				}
 			case "message_stop":
 				chunkChan <- StreamChunk{Done: true}
@@ -187,4 +239,30 @@ func (p *AnthropicProvider) SetMaxTokens(maxTokens int) {
 // SetTemperature 设置生成的温度。
 func (p *AnthropicProvider) SetTemperature(temp float64) {
 	p.temperature = temp
+}
+
+// convertUserMessage 转换用户消息
+func (p *AnthropicProvider) convertUserMessage(msg Message) anthropic.MessageParam {
+	return anthropic.NewUserMessage(anthropic.NewTextBlock(msg.Content))
+}
+
+// convertAssistantMessage 转换助手消息
+func (p *AnthropicProvider) convertAssistantMessage(msg Message) anthropic.MessageParam {
+	blocks := make([]anthropic.ContentBlockParamUnion, 0)
+	if msg.Content != "" {
+		blocks = append(blocks, anthropic.NewTextBlock(msg.Content))
+	}
+	for _, tc := range msg.ToolCalls {
+		var input map[string]interface{}
+		json.Unmarshal([]byte(tc.Arguments), &input)
+		blocks = append(blocks, anthropic.NewToolUseBlock(tc.ID, input, tc.Name))
+	}
+	return anthropic.NewAssistantMessage(blocks...)
+}
+
+// convertToolResultMessage 转换工具结果消息
+func (p *AnthropicProvider) convertToolResultMessage(msg Message) anthropic.MessageParam {
+	return anthropic.NewUserMessage(
+		anthropic.NewToolResultBlock(msg.ToolCallID, msg.Content, true),
+	)
 }
