@@ -27,27 +27,31 @@ func Init() error {
 	cfg = DefaultConfig()
 
 	// 配置 Viper
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
+	// 注意：如果 initConfig() 已经通过 SetConfigFile 指定了配置文件，
+	// 则不要重新设置路径，以尊重 --config 参数
+	if viper.ConfigFileUsed() == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+
+		configPath := filepath.Join(home, configDir)
+
+		viper.SetConfigName(configName)
+		viper.SetConfigType(configType)
+		viper.AddConfigPath(configPath)
+
+		// 如果配置目录不存在则创建
+		if err := os.MkdirAll(configPath, 0755); err != nil {
+			return err
+		}
 	}
-
-	configPath := filepath.Join(home, configDir)
-
-	viper.SetConfigName(configName)
-	viper.SetConfigType(configType)
-	viper.AddConfigPath(configPath)
 
 	// 启用环境变量覆盖
 	viper.AutomaticEnv()
 
 	// 设置默认值
 	setDefaults(cfg)
-
-	// 如果配置目录不存在则创建
-	if err := os.MkdirAll(configPath, 0755); err != nil {
-		return err
-	}
 
 	// 如果配置文件存在则读取
 	if err := viper.ReadInConfig(); err != nil {

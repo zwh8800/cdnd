@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/zwh8800/cdnd/internal/character"
@@ -50,7 +51,7 @@ func (s CreationStep) String() string {
 // CharacterCreationModel 角色创建模型
 type CharacterCreationModel struct {
 	step      CreationStep
-	name      string
+	nameInput textinput.Model
 	race      *character.Race
 	subrace   *character.SubRace
 	class     *character.Class
@@ -72,8 +73,13 @@ type CharacterCreationModel struct {
 
 // NewCharacterCreationModel 创建角色创建模型
 func NewCharacterCreationModel() CharacterCreationModel {
+	ti := textinput.New()
+	ti.Placeholder = "请输入角色名称"
+	ti.Focus()
+
 	return CharacterCreationModel{
 		step:             StepName,
+		nameInput:        ti,
 		availableRaces:   character.GetAllRaces(),
 		availableClasses: character.GetAllClasses(),
 		abilityPoints:    72,
@@ -88,6 +94,8 @@ func (m CharacterCreationModel) Init() tea.Cmd {
 
 // Update 更新
 func (m CharacterCreationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return m.handleKeyPress(msg)
@@ -97,6 +105,13 @@ func (m CharacterCreationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ready = true
 		return m, nil
 	}
+
+	// 在名称输入步骤时，更新 textinput
+	if m.step == StepName {
+		m.nameInput, cmd = m.nameInput.Update(msg)
+		return m, cmd
+	}
+
 	return m, nil
 }
 
@@ -113,13 +128,10 @@ func (m CharacterCreationModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.C
 		}
 	case tea.KeyDown:
 		m.cursor = m.handleDown()
-	case tea.KeyBackspace:
-		if m.step == StepName && len(m.name) > 0 {
-			m.name = m.name[:len(m.name)-1]
-		}
 	default:
-		if msg.Type == tea.KeyRunes && m.step == StepName {
-			m.name += string(msg.Runes)
+		// 名称输入步骤交给 textinput 处理
+		if m.step == StepName {
+			m.nameInput, _ = m.nameInput.Update(msg)
 		}
 	}
 	return m, nil
@@ -129,7 +141,7 @@ func (m CharacterCreationModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.C
 func (m CharacterCreationModel) handleEnter() (tea.Model, tea.Cmd) {
 	switch m.step {
 	case StepName:
-		if m.name == "" {
+		if m.nameInput.Value() == "" {
 			m.err = "请输入角色名称"
 			return m, nil
 		}
@@ -314,7 +326,7 @@ func (m CharacterCreationModel) renderNameStep() string {
 	var b strings.Builder
 	b.WriteString(CreationStyles.Label.Render("请输入角色名称:"))
 	b.WriteString("\n\n")
-	b.WriteString(CreationStyles.Input.Render(m.name + "█"))
+	b.WriteString(CreationStyles.Input.Render(m.nameInput.View()))
 	b.WriteString("\n\n")
 	b.WriteString(CreationStyles.Hint.Render("按回车确认"))
 	return b.String()
@@ -450,7 +462,7 @@ func (m CharacterCreationModel) renderConfirmStep() string {
 	var b strings.Builder
 	b.WriteString(CreationStyles.Label.Render("确认角色信息:"))
 	b.WriteString("\n\n")
-	b.WriteString(fmt.Sprintf("名称: %s\n", m.name))
+	b.WriteString(fmt.Sprintf("名称: %s\n", m.nameInput.Value()))
 	if m.race != nil {
 		raceName := m.race.Name
 		if m.subrace != nil {
@@ -510,10 +522,11 @@ var CreationStyles = struct {
 
 // GetCharacter 获取创建的角色
 func (m CharacterCreationModel) GetCharacter() *character.Character {
-	if m.name == "" || m.race == nil || m.class == nil {
+	name := m.nameInput.Value()
+	if name == "" || m.race == nil || m.class == nil {
 		return nil
 	}
-	c := character.NewCharacter(m.name, *m.race, *m.class)
+	c := character.NewCharacter(name, *m.race, *m.class)
 	c.Attributes = m.abilities
 	conMod := c.Attributes.Modifier(character.Constitution)
 	hitDie := c.Class.HitDice.GetHitDiceValue()

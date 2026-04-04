@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/zwh8800/cdnd/internal/game"
 	"github.com/zwh8800/cdnd/internal/save"
@@ -22,8 +23,7 @@ type GameModel struct {
 	ready  bool
 
 	// 输入
-	input       string
-	inputCursor int
+	input textinput.Model
 
 	// 输出
 	output      []string
@@ -37,10 +37,15 @@ type GameModel struct {
 
 // NewGameModel 创建游戏模型
 func NewGameModel(engine *game.Engine) GameModel {
+	ti := textinput.New()
+	ti.Prompt = "> "
+	ti.Focus()
+
 	return GameModel{
 		engine: engine,
 		ctx:    context.Background(),
 		output: make([]string, 0),
+		input:  ti,
 	}
 }
 
@@ -51,6 +56,8 @@ func (m GameModel) Init() tea.Cmd {
 
 // Update 更新
 func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return m.handleKeyPress(msg)
@@ -59,6 +66,7 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.ready = true
+		m.input.Width = msg.Width - 6
 		return m, nil
 
 	case DMResponseMsg:
@@ -73,7 +81,9 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	return m, nil
+	// 更新 textinput
+	m.input, cmd = m.input.Update(msg)
+	return m, cmd
 }
 
 // handleKeyPress 处理按键
@@ -86,54 +96,37 @@ func (m GameModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.loading {
 			return m, nil
 		}
-		if m.input == "" {
+		if m.input.Value() == "" {
 			return m, nil
 		}
 
 		// 添加玩家输入到输出
-		m.output = append(m.output, fmt.Sprintf("> %s", m.input))
+		m.output = append(m.output, fmt.Sprintf("> %s", m.input.Value()))
 
 		// 发送到引擎
-		input := m.input
-		m.input = ""
+		input := m.input.Value()
+		m.input.SetValue("")
 		m.loading = true
 		return m, m.processInput(input)
-
-	case tea.KeyBackspace:
-		if len(m.input) > 0 && m.inputCursor > 0 {
-			m.input = m.input[:m.inputCursor-1] + m.input[m.inputCursor:]
-			m.inputCursor--
-		}
-
-	case tea.KeyLeft:
-		if m.inputCursor > 0 {
-			m.inputCursor--
-		}
-
-	case tea.KeyRight:
-		if m.inputCursor < len(m.input) {
-			m.inputCursor++
-		}
 
 	case tea.KeyUp:
 		// 滚动输出
 		if m.outputIndex > 0 {
 			m.outputIndex--
 		}
+		return m, nil
 
 	case tea.KeyDown:
 		if m.outputIndex < len(m.output)-1 {
 			m.outputIndex++
 		}
+		return m, nil
 
 	default:
-		if msg.Type == tea.KeyRunes {
-			m.input = m.input[:m.inputCursor] + string(msg.Runes) + m.input[m.inputCursor:]
-			m.inputCursor += len(msg.Runes)
-		}
+		// 其他按键交给 textinput 处理
+		m.input, _ = m.input.Update(msg)
+		return m, nil
 	}
-
-	return m, nil
 }
 
 // processInput 处理输入命令
@@ -228,22 +221,10 @@ func (m GameModel) renderOutput(height int) string {
 
 // renderInput 渲染输入栏
 func (m GameModel) renderInput() string {
-	prompt := "> "
 	if m.loading {
-		prompt = "处理中... "
+		return GameStyles.InputBox.Render("处理中... ")
 	}
-
-	inputLine := prompt + m.input
-	if !m.loading {
-		// 光标
-		if m.inputCursor < len(m.input) {
-			inputLine = prompt + m.input[:m.inputCursor] + "█" + m.input[m.inputCursor:]
-		} else {
-			inputLine = prompt + m.input + "█"
-		}
-	}
-
-	return GameStyles.InputBox.Render(inputLine)
+	return GameStyles.InputBox.Render(m.input.View())
 }
 
 // DMResponseMsg DM响应消息

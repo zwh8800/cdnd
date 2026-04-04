@@ -1,71 +1,71 @@
-# cdnd Configuration File
-# This is a sample configuration file for cdnd.
-# Copy this file to ~/.cdnd/config.yaml or run `cdnd config init` to create one.
+# cdnd 配置文件
+# 这是一个 cdnd 示例配置文件。
+# 将此文件复制到 ~/.cdnd/config.yaml 或运行 `cdnd config init` 来创建一个。
 
-# LLM (Large Language Model) Settings
+# LLM（大语言模型）设置
 llm:
-  # Default LLM provider to use
+  # 默认使用的 LLM 提供者
   default_provider: openai
 
-  # LLM provider configurations
+  # LLM 提供者配置
   providers:
-    # OpenAI provider
+    # OpenAI 提供者
     openai:
-      # Your OpenAI API key (leave empty to use OPENAI_API_KEY env var)
+      # 你的 OpenAI API 密钥（留空则使用 OPENAI_API_KEY 环境变量）
       api_key: ""
-      # Model to use
-      model: "gpt-4-turbo-preview"
-      # API base URL
-      base_url: "https://api.openai.com/v1"
-      # Maximum tokens per response
-      max_tokens: 4096
-      # Temperature for response generation (0.0 - 1.0)
-      temperature: 0.7
+      # 使用的模型
+      model: "qwen3.5-plus"
+      # API 基础 URL
+      base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      # 每次响应的最大 token 数
+      max_tokens: 65536
+      # 响应生成的温度（0.0 - 1.0）
+      temperature: 1.0
 
-    # Anthropic provider
+    # Anthropic 提供者
     anthropic:
       api_key: ""
       model: "claude-3-opus-20240229"
       max_tokens: 4096
       temperature: 0.7
 
-    # Ollama provider (local models)
+    # Ollama 提供者（本地模型）
     ollama:
-      # No API key needed for local Ollama
+      # 本地 Ollama 不需要 API 密钥
       model: "llama2"
       base_url: "http://localhost:11434"
       max_tokens: 4096
       temperature: 0.7
 
-# Game Settings
+# 游戏设置
 game:
-  # Enable autosave
+  # 启用自动保存
   autosave: true
-  # Autosave interval (e.g., 5m, 10m, 1h)
+  # 自动保存间隔（例如：5m, 10m, 1h）
   autosave_interval: 5m
-  # Maximum number of history turns to keep in memory
+  # 在内存中保留的最大历史回合数
   max_history_turns: 100
-  # Language for game content (zh-CN, en-US, etc.)
+  # 游戏内容的语言（zh-CN, en-US 等）
   language: "zh-CN"
 
-# Display Settings
+# 显示设置
 display:
-  # Enable typewriter effect for text output
+  # 启用文本打字机效果
   typewriter_effect: true
-  # Typing speed for typewriter effect (e.g., 30ms, 50ms, 100ms)
+  # 打字机效果的打字速度（例如：30ms, 50ms, 100ms）
   typing_speed: 50ms
-  # Enable colored output
+  # 启用彩色输出
   color_output: true
-  # Show token usage information
+  # 显示 token 使用信息
   show_tokens: false
 
-# Advanced Settings
+# 高级设置
 advanced:
-  # Enable response caching
+  # 启用响应缓存
   cache_enabled: true
-  # Cache time-to-live (e.g., 1h, 24h, 7d)
+  # 缓存生存时间（例如：1h, 24h, 7d）
   cache_ttl: 24h
-  # Log level (debug, info, warn, error)
+  # 日志级别（debug, info, warn, error）
   log_level: "info"
-  # Log file path (leave empty for console only)
+  # 日志文件路径（留空则仅输出到控制台）
   log_file: ""
