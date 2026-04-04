@@ -166,16 +166,14 @@ func (m GameModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// processInput 处理输入命令（流式版本）
+// processInput 处理输入命令（使用 Tool Call 版本）
 func (m GameModel) processInput(input string) tea.Cmd {
 	return func() tea.Msg {
-		stream, err := m.engine.ProcessPlayerInputStream(m.ctx, input)
+		resp, err := m.engine.ProcessWithTools(m.ctx, input)
 		if err != nil {
 			return DMResponseMsg{Err: err}
 		}
-
-		// 返回流式开始消息
-		return StreamStartMsg{Stream: stream}
+		return DMResponseMsg{Content: resp.Content, Phase: resp.Phase}
 	}
 }
 
