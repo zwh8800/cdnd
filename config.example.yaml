@@ -1,0 +1,71 @@
+# cdnd Configuration File
+# This is a sample configuration file for cdnd.
+# Copy this file to ~/.cdnd/config.yaml or run `cdnd config init` to create one.
+
+# LLM (Large Language Model) Settings
+llm:
+  # Default LLM provider to use
+  default_provider: openai
+
+  # LLM provider configurations
+  providers:
+    # OpenAI provider
+    openai:
+      # Your OpenAI API key (leave empty to use OPENAI_API_KEY env var)
+      api_key: ""
+      # Model to use
+      model: "gpt-4-turbo-preview"
+      # API base URL
+      base_url: "https://api.openai.com/v1"
+      # Maximum tokens per response
+      max_tokens: 4096
+      # Temperature for response generation (0.0 - 1.0)
+      temperature: 0.7
+
+    # Anthropic provider
+    anthropic:
+      api_key: ""
+      model: "claude-3-opus-20240229"
+      max_tokens: 4096
+      temperature: 0.7
+
+    # Ollama provider (local models)
+    ollama:
+      # No API key needed for local Ollama
+      model: "llama2"
+      base_url: "http://localhost:11434"
+      max_tokens: 4096
+      temperature: 0.7
+
+# Game Settings
+game:
+  # Enable autosave
+  autosave: true
+  # Autosave interval (e.g., 5m, 10m, 1h)
+  autosave_interval: 5m
+  # Maximum number of history turns to keep in memory
+  max_history_turns: 100
+  # Language for game content (zh-CN, en-US, etc.)
+  language: "zh-CN"
+
+# Display Settings
+display:
+  # Enable typewriter effect for text output
+  typewriter_effect: true
+  # Typing speed for typewriter effect (e.g., 30ms, 50ms, 100ms)
+  typing_speed: 50ms
+  # Enable colored output
+  color_output: true
+  # Show token usage information
+  show_tokens: false
+
+# Advanced Settings
+advanced:
+  # Enable response caching
+  cache_enabled: true
+  # Cache time-to-live (e.g., 1h, 24h, 7d)
+  cache_ttl: 24h
+  # Log level (debug, info, warn, error)
+  log_level: "info"
+  # Log file path (leave empty for console only)
+  log_file: ""
