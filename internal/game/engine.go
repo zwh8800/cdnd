@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/zwh8800/cdnd/internal/character"
 	"github.com/zwh8800/cdnd/internal/config"
 	"github.com/zwh8800/cdnd/internal/llm"
@@ -80,9 +81,26 @@ func (e *Engine) registerTools() {
 func (e *Engine) Start(c *character.Character) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.state = NewState()
-	e.state.SetCharacter(c)
-	e.state.SetPhase(save.PhaseIntroduction)
+	// 不要创建新的 State 对象，而是重置现有对象
+	// 这样工具中保存的 state 引用仍然有效
+	e.state.mu.Lock()
+	e.state.SessionID = uuid.New().String()
+	e.state.Phase = save.PhaseIntroduction
+	e.state.TurnCount = 0
+	e.state.SubTurn = 0
+	e.state.Character = c
+	e.state.CurrentScene = nil
+	e.state.VisitedScenes = make(map[string]bool)
+	e.state.WorldFlags = make(map[string]bool)
+	e.state.WorldCounters = make(map[string]int)
+	e.state.Quests = make([]*save.QuestState, 0)
+	e.state.History = make([]llm.Message, 0)
+	e.state.DMContext = ""
+	e.state.Combat = nil
+	e.state.CreatedAt = time.Now()
+	e.state.LastSavedAt = time.Now()
+	e.state.PlayedTime = 0
+	e.state.mu.Unlock()
 	return nil
 }
 
@@ -94,23 +112,48 @@ func (e *Engine) LoadGame(slot int) error {
 	if err != nil {
 		return fmt.Errorf("加载存档失败: %w", err)
 	}
-	e.state = &State{
-		SessionID:     data.SessionID,
-		Phase:         data.Phase,
-		TurnCount:     data.TurnCount,
-		Character:     data.Character,
-		CurrentScene:  data.CurrentScene,
-		VisitedScenes: data.VisitedScenes,
-		WorldFlags:    data.WorldFlags,
-		WorldCounters: data.WorldCounters,
-		Quests:        data.Quests,
-		History:       data.History,
-		DMContext:     data.DMContext,
-		Combat:        data.Combat,
-		CreatedAt:     data.CreatedAt,
-		LastSavedAt:   data.UpdatedAt,
-		PlayedTime:    data.PlayTime,
+
+	// 检查角色数据是否有效
+	if data.Character == nil {
+		return fmt.Errorf("存档数据不完整：角色数据缺失")
 	}
+
+	// 初始化空的 map（如果存档中为空）
+	if data.VisitedScenes == nil {
+		data.VisitedScenes = make(map[string]bool)
+	}
+	if data.WorldFlags == nil {
+		data.WorldFlags = make(map[string]bool)
+	}
+	if data.WorldCounters == nil {
+		data.WorldCounters = make(map[string]int)
+	}
+
+	// 更新现有 state 对象的字段，而不是创建新对象
+	// 这样工具中保存的 state 引用仍然有效
+	e.state.mu.Lock()
+	e.state.SessionID = data.SessionID
+	e.state.Phase = data.Phase
+	e.state.TurnCount = data.TurnCount
+	e.state.Character = data.Character
+	e.state.CurrentScene = data.CurrentScene
+	e.state.VisitedScenes = data.VisitedScenes
+	e.state.WorldFlags = data.WorldFlags
+	e.state.WorldCounters = data.WorldCounters
+	e.state.Quests = data.Quests
+	e.state.History = data.History
+	e.state.DMContext = data.DMContext
+	e.state.Combat = data.Combat
+	e.state.CreatedAt = data.CreatedAt
+	e.state.LastSavedAt = data.UpdatedAt
+	e.state.PlayedTime = data.PlayTime
+	e.state.mu.Unlock()
+
+	// 验证角色是否正确加载
+	if e.state.GetCharacter() == nil {
+		return fmt.Errorf("角色加载失败：角色数据为空")
+	}
+
 	scenes, npcs := data.GetWorldData()
 	e.world.Import(scenes, npcs)
 	return nil
@@ -601,7 +644,7 @@ func generateDiceNarrative(toolName string, args map[string]interface{}, result 
 	var sb strings.Builder
 
 	if execErr != nil {
-		sb.WriteString("  └─ 骰子投掷出现异常，命运之轮暂时停滞...\n")
+		sb.WriteString(fmt.Sprintf("  └─ 骰子投掷出现异常，命运之轮暂时停滞... (%s)\n", execErr.Error()))
 		return sb.String()
 	}
 

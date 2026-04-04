@@ -297,12 +297,22 @@ func (m GameModel) renderOutput(height int) string {
 
 // updateViewportContent 更新 viewport 内容
 func (m *GameModel) updateViewportContent() {
-	// 构建输出内容
+	// 构建输出内容，在每条消息之间添加分隔线
 	var lines []string
-	lines = append(lines, m.output...)
+
+	for i, output := range m.output {
+		// 如果不是第一条消息，在消息前添加分隔线
+		if i > 0 {
+			lines = append(lines, "────────────────────────────────────────────────────────────────────────────────")
+		}
+		lines = append(lines, output)
+	}
 
 	// 如果正在流式输出，添加当前流式内容
 	if m.isStreaming && m.streamingContent != "" {
+		if len(lines) > 0 {
+			lines = append(lines, "────────────────────────────────────────────────────────────────────────────────")
+		}
 		lines = append(lines, m.streamingContent)
 	}
 
