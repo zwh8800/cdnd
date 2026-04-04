@@ -550,6 +550,18 @@ func formatToolResult(result *tools.ToolResult, err error) string {
 	return sb.String()
 }
 
+// indentLines 给每一行文本添加指定的前缀缩进
+func indentLines(text string, prefix string) string {
+	lines := strings.Split(text, "\n")
+	var result strings.Builder
+	for _, line := range lines {
+		if line != "" {
+			result.WriteString(prefix + line + "\n")
+		}
+	}
+	return result.String()
+}
+
 // generateToolNarrative 生成D&D风格的工具执行叙述
 func (e *Engine) generateToolNarrative(toolName string, args map[string]interface{}, result *tools.ToolResult, execErr error) string {
 	var sb strings.Builder
@@ -570,27 +582,29 @@ func (e *Engine) generateToolNarrative(toolName string, args map[string]interfac
 	// 添加明显的工具调用标记
 	sb.WriteString("\n")
 	sb.WriteString("╔════════════════════════════════════════════════════════════════╗\n")
-	sb.WriteString(fmt.Sprintf("⚙️  工具调用: %s\n", toolName))
+	sb.WriteString(indentLines(fmt.Sprintf("⚙️  工具调用: %s", toolName), "  "))
 	sb.WriteString("╠════════════════════════════════════════════════════════════════╣\n")
 
 	// 生成叙述标题
-	sb.WriteString(statusMarker)
-	sb.WriteString(getToolNarrativeHeader(toolName, toolCategory))
-	sb.WriteString("\n")
+	headerText := statusMarker + getToolNarrativeHeader(toolName, toolCategory)
+	sb.WriteString(indentLines(headerText, "  "))
 
 	// 根据工具类型生成不同的叙述内容
+	var narrativeContent string
 	switch toolCategory {
 	case "dice":
-		sb.WriteString(generateDiceNarrative(toolName, args, result, execErr))
+		narrativeContent = generateDiceNarrative(toolName, args, result, execErr)
 	case "character":
-		sb.WriteString(generateCharacterNarrative(toolName, args, result, execErr))
+		narrativeContent = generateCharacterNarrative(toolName, args, result, execErr)
 	case "item":
-		sb.WriteString(generateItemNarrative(toolName, args, result, execErr))
+		narrativeContent = generateItemNarrative(toolName, args, result, execErr)
 	case "world":
-		sb.WriteString(generateWorldNarrative(toolName, args, result, execErr))
+		narrativeContent = generateWorldNarrative(toolName, args, result, execErr)
 	default:
-		sb.WriteString(generateGenericNarrative(toolName, args, result, execErr))
+		narrativeContent = generateGenericNarrative(toolName, args, result, execErr)
 	}
+
+	sb.WriteString(indentLines(narrativeContent, "  "))
 
 	sb.WriteString("╚════════════════════════════════════════════════════════════════╝\n")
 
