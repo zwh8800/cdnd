@@ -96,6 +96,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.narrative.width = m.width
 		m.narrative.height = m.height - headerHeight - inputHeight - menuHeight - 2
 
+		// 同步更新 viewport 尺寸，考虑 NarrativeStyle.Padding(1, 2)
+		m.narrative.viewport.Width = m.width - 4             // 左右各 2 字符内边距
+		m.narrative.viewport.Height = m.narrative.height - 2 // 上下各 1 行内边距
+
 		m.input.width = m.width
 		m.input.height = inputHeight
 
@@ -200,8 +204,12 @@ type NarrativeModel struct {
 
 // NewNarrativeModel 创建一个新的叙述模型。
 func NewNarrativeModel() NarrativeModel {
+	vp := viewport.New(0, 0)
+	vp.MouseWheelEnabled = true
+
 	return NarrativeModel{
-		content: []string{},
+		content:  []string{},
+		viewport: vp,
 	}
 }
 

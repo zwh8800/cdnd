@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/zwh8800/cdnd/internal/game"
@@ -26,8 +27,10 @@ type GameModel struct {
 	input textinput.Model
 
 	// 输出
-	output      []string
-	outputIndex int
+	output []string
+
+	// 视口（用于滚动显示）
+	viewport viewport.Model
 
 	// 流式输出缓冲区
 	streamingContent string
@@ -45,11 +48,15 @@ func NewGameModel(engine *game.Engine) GameModel {
 	ti.Prompt = "> "
 	ti.Focus()
 
+	vp := viewport.New(0, 0)
+	vp.MouseWheelEnabled = true
+
 	return GameModel{
-		engine: engine,
-		ctx:    context.Background(),
-		output: make([]string, 0),
-		input:  ti,
+		engine:   engine,
+		ctx:      context.Background(),
+		output:   make([]string, 0),
+		input:    ti,
+		viewport: vp,
 	}
 }
 
@@ -60,18 +67,78 @@ func (m GameModel) Init() tea.Cmd {
 
 // Update 更新
 func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
 	var cmd tea.Cmd
+
+	// 始终让 viewport 处理消息（滚动、鼠标滚轮等）
+	m.viewport, cmd = m.viewport.Update(msg)
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		return m.handleKeyPress(msg)
+		// 处理特殊按键
+		switch msg.Type {
+		case tea.KeyCtrlC, tea.KeyEsc:
+			return m, tea.Quit
+
+		case tea.KeyEnter:
+			if m.loading {
+				return m, nil
+			}
+			if m.input.Value() == "" {
+				return m, nil
+			}
+
+			// 添加玩家输入到输出
+			m.output = append(m.output, fmt.Sprintf("> %s", m.input.Value()))
+			m.updateViewportContent()
+			m.viewport.GotoBottom()
+
+			// 发送到引擎
+			input := m.input.Value()
+			m.input.SetValue("")
+			m.loading = true
+			return m, tea.Batch(append(cmds, m.processInput(input))...)
+		}
+
+		// 其他按键交给 textinput 处理
+		m.input, cmd = m.input.Update(msg)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		m.ready = true
-		m.input.Width = msg.Width - 6
-		return m, nil
+
+		// 计算 UI 组件高度
+		// 状态栏: 约 2 行（内容 + 换行）
+		// 输入框: 约 3 行（内容 + border）
+		// 组件间换行: 约 1 行
+		statusBarHeight := 2
+		inputBoxHeight := 3
+		separatorHeight := 1
+
+		// GameStyles.Box 有 Border(RoundedBorder) 和 Padding(0, 1)
+		// Border 占 2 行高度（上下各 1）
+		viewportHeight := m.height - statusBarHeight - inputBoxHeight - separatorHeight - 2
+		viewportWidth := m.width - 4 // 左右 border(2) + padding(2)
+
+		if viewportHeight < 1 {
+			viewportHeight = 1
+		}
+		if viewportWidth < 1 {
+			viewportWidth = 1
+		}
+
+		m.viewport.Width = viewportWidth
+		m.viewport.Height = viewportHeight
+		m.input.Width = m.width - 6
+
+		m.updateViewportContent()
 
 	case DMResponseMsg:
 		m.loading = false
@@ -87,7 +154,8 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.output = append(m.output, msg.Content)
 			m.phase = msg.Phase
 		}
-		return m, nil
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
 
 	case StreamChunkMsg:
 		// 处理流式数据块
@@ -96,79 +164,38 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.isStreaming = false
 			m.err = msg.Error
 			m.output = append(m.output, fmt.Sprintf("错误: %v", msg.Error))
-			return m, nil
+			m.updateViewportContent()
+			m.viewport.GotoBottom()
+			return m, tea.Batch(cmds...)
 		}
 
 		if msg.Done {
 			// 流式完成
 			m.loading = false
 			m.isStreaming = false
-			// 将完整内容添加到输出
 			if m.streamingContent != "" {
 				m.output = append(m.output, m.streamingContent)
 			}
 			m.streamingContent = ""
-			return m, nil
+			m.updateViewportContent()
+			m.viewport.GotoBottom()
+			return m, tea.Batch(cmds...)
 		}
 
 		// 累积流式内容并继续等待下一个数据块
 		m.streamingContent += msg.Content
-		return m, waitForStreamChunks(msg.stream)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return m, tea.Batch(append(cmds, waitForStreamChunks(msg.stream))...)
 
 	case StreamStartMsg:
 		// 开始流式输出
 		m.isStreaming = true
 		m.streamingContent = ""
-		// 开始接收流式数据块
-		return m, waitForStreamChunks(msg.Stream)
+		return m, tea.Batch(append(cmds, waitForStreamChunks(msg.Stream))...)
 	}
 
-	// 更新 textinput
-	m.input, cmd = m.input.Update(msg)
-	return m, cmd
-}
-
-// handleKeyPress 处理按键
-func (m GameModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyCtrlC, tea.KeyEsc:
-		return m, tea.Quit
-
-	case tea.KeyEnter:
-		if m.loading {
-			return m, nil
-		}
-		if m.input.Value() == "" {
-			return m, nil
-		}
-
-		// 添加玩家输入到输出
-		m.output = append(m.output, fmt.Sprintf("> %s", m.input.Value()))
-
-		// 发送到引擎
-		input := m.input.Value()
-		m.input.SetValue("")
-		m.loading = true
-		return m, m.processInput(input)
-
-	case tea.KeyUp:
-		// 滚动输出
-		if m.outputIndex > 0 {
-			m.outputIndex--
-		}
-		return m, nil
-
-	case tea.KeyDown:
-		if m.outputIndex < len(m.output)-1 {
-			m.outputIndex++
-		}
-		return m, nil
-
-	default:
-		// 其他按键交给 textinput 处理
-		m.input, _ = m.input.Update(msg)
-		return m, nil
-	}
+	return m, tea.Batch(cmds...)
 }
 
 // processInput 处理输入命令（使用 Tool Call 版本）
@@ -260,33 +287,27 @@ func (m GameModel) renderStatusBar() string {
 // renderOutput 渲染输出区域
 func (m GameModel) renderOutput(height int) string {
 	if len(m.output) == 0 && !m.isStreaming {
-		return GameStyles.Box.Render("欢迎来到D&D冒险！输入你的行动开始游戏。")
+		return GameStyles.Box.Height(height).Render("欢迎来到D&D冒险！输入你的行动开始游戏。")
 	}
 
+	// 直接使用 viewport 的 View() 方法
+	// 注意：内容已经在 Update 中通过 updateViewportContent 设置
+	return GameStyles.Box.Height(height).Render(m.viewport.View())
+}
+
+// updateViewportContent 更新 viewport 内容
+func (m *GameModel) updateViewportContent() {
 	// 构建输出内容
 	var lines []string
 	lines = append(lines, m.output...)
 
 	// 如果正在流式输出，添加当前流式内容
-	if m.isStreaming {
-		if m.streamingContent != "" {
-			lines = append(lines, m.streamingContent)
-		}
+	if m.isStreaming && m.streamingContent != "" {
+		lines = append(lines, m.streamingContent)
 	}
 
-	// 计算显示范围
-	start := 0
-	if len(lines) > height {
-		start = len(lines) - height
-	}
-
-	displayLines := lines[start:]
-	if len(displayLines) > height {
-		displayLines = displayLines[len(displayLines)-height:]
-	}
-
-	content := strings.Join(displayLines, "\n")
-	return GameStyles.Box.Height(height).Render(content)
+	content := strings.Join(lines, "\n")
+	m.viewport.SetContent(content)
 }
 
 // renderInput 渲染输入栏
