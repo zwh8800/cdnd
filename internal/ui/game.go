@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -12,6 +13,9 @@ import (
 	"github.com/zwh8800/cdnd/internal/game"
 	"github.com/zwh8800/cdnd/internal/save"
 )
+
+// 加载动画常量
+var brailleFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠦"}
 
 // GameModel 游戏主界面模型
 type GameModel struct {
@@ -40,6 +44,10 @@ type GameModel struct {
 	phase   save.GamePhase
 	loading bool
 	err     error
+
+	// 加载动画状态
+	loadingFrame int // Braille 动画帧索引 (0-5)
+	loadingTimer int // 进度点动画帧 (0-3)
 }
 
 // NewGameModel 创建游戏模型
@@ -100,7 +108,9 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			input := m.input.Value()
 			m.input.SetValue("")
 			m.loading = true
-			return m, tea.Batch(append(cmds, m.processInput(input))...)
+			m.loadingFrame = 0
+			m.loadingTimer = 0
+			return m, tea.Batch(append(cmds, m.processInput(input), startLoadingAnimation())...)
 		}
 
 		// 其他按键交给 textinput 处理
@@ -193,6 +203,16 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.isStreaming = true
 		m.streamingContent = ""
 		return m, tea.Batch(append(cmds, waitForStreamChunks(msg.Stream))...)
+
+	case LoadingTickMsg:
+		// 更新加载动画帧
+		if m.loading {
+			m.loadingFrame = (m.loadingFrame + 1) % 6
+			m.loadingTimer = (m.loadingTimer + 1) % 4
+			return m, tea.Batch(append(cmds, startLoadingAnimation())...)
+		}
+		// loading 已为 false，停止动画
+		return m, nil
 	}
 
 	return m, tea.Batch(cmds...)
@@ -316,10 +336,20 @@ func (m *GameModel) updateViewportContent() {
 // renderInput 渲染输入栏
 func (m GameModel) renderInput() string {
 	if m.loading {
-		return GameStyles.InputBox.Render("处理中... ")
+		// Braille 旋转器
+		braille := brailleFrames[m.loadingFrame]
+
+		// 进度点动画
+		progressDots := strings.Repeat("·", m.loadingTimer) + strings.Repeat(" ", maxInt(0, 3-m.loadingTimer))
+
+		loadingText := fmt.Sprintf("%s 处理中 %s", braille, progressDots)
+		return GameStyles.InputBox.Render(loadingText)
 	}
 	return GameStyles.InputBox.Render(m.input.View())
 }
+
+// LoadingTickMsg 加载动画计时消息
+type LoadingTickMsg time.Time
 
 // DMResponseMsg DM响应消息
 type DMResponseMsg struct {
@@ -340,6 +370,13 @@ type StreamChunkMsg struct {
 	Done    bool
 	Error   error
 	stream  <-chan game.StreamChunk
+}
+
+// startLoadingAnimation 启动加载动画计时器
+func startLoadingAnimation() tea.Cmd {
+	return tea.Tick(200*time.Millisecond, func(t time.Time) tea.Msg {
+		return LoadingTickMsg(t)
+	})
 }
 
 // maxInt 辅助函数
