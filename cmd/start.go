@@ -22,12 +22,11 @@ var (
 // startCmd 表示开始命令。
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Start a new game",
-	Long: `Start a new D&D adventure game.
+	Short: "开始新游戏",
+	Long: `开始一场新的 D&D 冒险游戏。
 
-You can specify a save slot and scenario to play. If not specified,
-the game will use the default settings. Use --skip-creation to skip
-character creation (for testing).`,
+你可以指定存档槽位和剧本。如果未指定，游戏将使用默认设置。
+使用 --skip-creation 可跳过角色创建（用于测试）。`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Get()
 
@@ -48,7 +47,7 @@ character creation (for testing).`,
 		// 如果跳过角色创建，使用测试角色
 		if skipCreation {
 			// TODO: 创建测试角色
-			fmt.Println("Skip creation mode - not yet implemented")
+			fmt.Println("跳过创建模式 - 尚未实现")
 			return
 		}
 
@@ -94,7 +93,7 @@ character creation (for testing).`,
 // startGameCmd 直接开始游戏（使用已有角色）
 var startGameCmd = &cobra.Command{
 	Use:   "game",
-	Short: "Start game with existing character",
+	Short: "使用已有角色开始游戏",
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Get()
 
@@ -136,7 +135,7 @@ var startGameCmd = &cobra.Command{
 // testLLMCmd 测试 LLM 连接
 var testLLMCmd = &cobra.Command{
 	Use:   "test-llm",
-	Short: "Test LLM connection",
+	Short: "测试 LLM 连接",
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Get()
 
@@ -146,7 +145,7 @@ var testLLMCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Printf("Testing connection to %s...\n", cfg.LLM.DefaultProvider)
+		fmt.Printf("正在测试与 %s 的连接...\n", cfg.LLM.DefaultProvider)
 
 		resp, err := provider.Generate(context.Background(), &llm.Request{
 			Messages: []llm.Message{
@@ -158,7 +157,7 @@ var testLLMCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Println("Response:")
+		fmt.Println("响应:")
 		fmt.Println(resp.Content)
 	},
 }
@@ -168,7 +167,7 @@ func init() {
 	startCmd.AddCommand(startGameCmd)
 	startCmd.AddCommand(testLLMCmd)
 
-	startCmd.Flags().IntVarP(&startSaveSlot, "save-slot", "s", 1, "save slot number (1-10)")
-	startCmd.Flags().StringVarP(&startScenario, "scenario", "S", "default", "scenario to play")
-	startCmd.Flags().BoolVar(&skipCreation, "skip-creation", false, "skip character creation for testing")
+	startCmd.Flags().IntVarP(&startSaveSlot, "save-slot", "s", 1, "存档槽位编号（1-10）")
+	startCmd.Flags().StringVarP(&startScenario, "scenario", "S", "default", "要游玩的剧本")
+	startCmd.Flags().BoolVar(&skipCreation, "skip-creation", false, "跳过角色创建（用于测试）")
 }

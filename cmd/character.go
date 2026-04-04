@@ -37,16 +37,16 @@ var characterCreateCmd = &cobra.Command{
 
 		character := finalModel.(ui.CharacterCreationModel).GetCharacter()
 		if character == nil {
-			fmt.Println("Character creation cancelled.")
+			fmt.Println("角色创建已取消。")
 			return
 		}
 
-		fmt.Println("\nCharacter created successfully!")
-		fmt.Printf("Name: %s\n", character.Name)
+		fmt.Println("\n角色创建成功！")
+		fmt.Printf("姓名: %s\n", character.Name)
 		if character.HasClass() {
-			fmt.Printf("Class: %s\n", character.Class.Name)
+			fmt.Printf("职业: %s\n", character.Class.Name)
 		}
-		fmt.Printf("Race: %s\n", character.Race.Name)
+		fmt.Printf("种族: %s\n", character.Race.Name)
 		fmt.Printf("HP: %d/%d\n", character.HitPoints.Current, character.HitPoints.Max)
 	},
 }
@@ -54,13 +54,13 @@ var characterCreateCmd = &cobra.Command{
 // characterListCmd 表示角色列表命令。
 var characterListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all saved characters",
+	Short: "列出所有已保存的角色",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Saved Characters:")
+		fmt.Println("已保存的角色:")
 		fmt.Println("================")
 		// TODO: List saved characters from templates
-		fmt.Println("\nNo saved character templates found.")
-		fmt.Println("Use 'cdnd character create' to create a new character.")
+		fmt.Println("\n未找到已保存的角色模板。")
+		fmt.Println("使用 'cdnd character create' 创建新角色。")
 	},
 }
 
@@ -71,21 +71,21 @@ var characterDeleteCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
-		fmt.Printf("Deleting character: %s\n", name)
+		fmt.Printf("正在删除角色: %s\n", name)
 		// TODO: 删除角色模板
-		fmt.Println("Character deleted successfully.")
+		fmt.Println("角色已删除。")
 	},
 }
 
 // characterShowCmd 显示角色详情
 var characterShowCmd = &cobra.Command{
 	Use:   "show [name]",
-	Short: "Show character details",
+	Short: "显示角色详情",
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		// TODO: 从存档或模板加载角色
-		fmt.Println("Character details:")
-		fmt.Println("  This feature is not yet implemented.")
+		fmt.Println("角色详情:")
+		fmt.Println("  此功能尚未实现。")
 	},
 }
 

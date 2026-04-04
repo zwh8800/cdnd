@@ -23,12 +23,11 @@ var (
 // rootCmd 表示不带子命令调用时的基础命令。
 var rootCmd = &cobra.Command{
 	Use:   "cdnd",
-	Short: "D&D CLI game powered by LLM",
-	Long: `cdnd is a command-line Dungeons & Dragons role-playing game
-powered by Large Language Models (LLM).
+	Short: "由 LLM 驱动的 D&D 命令行游戏",
+	Long: `cdnd 是一款由大语言模型（LLM）驱动的命令行龙与地下城角色扮演游戏。
 
-Experience an interactive D&D adventure with AI as your Dungeon Master.
-Supports multiple LLM providers including OpenAI, Anthropic Claude, and Ollama.`,
+体验与 AI 地下城主互动的互动式 D&D 冒险。
+支持多种 LLM 提供商，包括 OpenAI、Anthropic Claude 和 Ollama。`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// 初始化配置
 		if err := config.Init(); err != nil {
@@ -49,9 +48,21 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
+	// 禁用 completion 命令
+	rootCmd.CompletionOptions.HiddenDefaultCmd = true
+
+	// 设置 help 命令描述为中文并隐藏
+	helpCmd := &cobra.Command{
+		Use:    "help [command]",
+		Short:  "查看命令帮助信息",
+		Long:   "查看指定命令的详细帮助信息和使用说明。",
+		Hidden: true,
+	}
+	rootCmd.SetHelpCommand(helpCmd)
+
 	// 全局标志
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cdnd/config.yaml)")
-	rootCmd.PersistentFlags().Bool("debug", false, "enable debug mode")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "配置文件路径（默认为 $HOME/.cdnd/config.yaml）")
+	rootCmd.PersistentFlags().Bool("debug", false, "启用调试模式")
 	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
 }
 

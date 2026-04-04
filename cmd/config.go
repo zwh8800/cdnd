@@ -31,7 +31,7 @@ var configInitCmd = &cobra.Command{
 			os.Exit(1)
 		}
 		configPath, _ := config.GetConfigPath()
-		fmt.Printf("Configuration file created: %s\n", configPath)
+		fmt.Printf("配置文件已创建: %s\n", configPath)
 	},
 }
 
@@ -56,7 +56,7 @@ var configGetCmd = &cobra.Command{
 		key := args[0]
 		value := viper.Get(key)
 		if value == nil {
-			fmt.Fprintf(os.Stderr, "Key not found: %s\n", key)
+			fmt.Fprintf(os.Stderr, "未找到该键: %s\n", key)
 			os.Exit(1)
 		}
 		fmt.Printf("%s: %v\n", key, value)
@@ -79,40 +79,40 @@ var configSetCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Printf("Set %s = %s\n", key, value)
+		fmt.Printf("已设置 %s = %s\n", key, value)
 	},
 }
 
 func printAllConfig(cfg *config.Config) {
-	fmt.Println("Current Configuration:")
+	fmt.Println("当前配置:")
 	fmt.Println("======================")
-	fmt.Println("\nLLM Settings:")
-	fmt.Printf("  Default Provider: %s\n", cfg.LLM.DefaultProvider)
+	fmt.Println("\nLLM 设置:")
+	fmt.Printf("  默认提供者: %s\n", cfg.LLM.DefaultProvider)
 	for name, provider := range cfg.LLM.Providers {
 		fmt.Printf("\n  [%s]\n", name)
-		fmt.Printf("    Model: %s\n", provider.Model)
+		fmt.Printf("    模型: %s\n", provider.Model)
 		if provider.BaseURL != "" {
-			fmt.Printf("    Base URL: %s\n", provider.BaseURL)
+			fmt.Printf("    基础 URL: %s\n", provider.BaseURL)
 		}
-		fmt.Printf("    Max Tokens: %d\n", provider.MaxTokens)
-		fmt.Printf("    Temperature: %.2f\n", provider.Temperature)
+		fmt.Printf("    最大 Token: %d\n", provider.MaxTokens)
+		fmt.Printf("    温度: %.2f\n", provider.Temperature)
 	}
 
-	fmt.Println("\nGame Settings:")
-	fmt.Printf("  Autosave: %v\n", cfg.Game.Autosave)
-	fmt.Printf("  Autosave Interval: %v\n", cfg.Game.AutosaveInterval)
-	fmt.Printf("  Max History Turns: %d\n", cfg.Game.MaxHistoryTurns)
-	fmt.Printf("  Language: %s\n", cfg.Game.Language)
+	fmt.Println("\n游戏设置:")
+	fmt.Printf("  自动保存: %v\n", cfg.Game.Autosave)
+	fmt.Printf("  自动保存间隔: %v\n", cfg.Game.AutosaveInterval)
+	fmt.Printf("  最大历史轮数: %d\n", cfg.Game.MaxHistoryTurns)
+	fmt.Printf("  语言: %s\n", cfg.Game.Language)
 
-	fmt.Println("\nDisplay Settings:")
-	fmt.Printf("  Typewriter Effect: %v\n", cfg.Display.TypewriterEffect)
-	fmt.Printf("  Typing Speed: %v\n", cfg.Display.TypingSpeed)
-	fmt.Printf("  Color Output: %v\n", cfg.Display.ColorOutput)
+	fmt.Println("\n显示设置:")
+	fmt.Printf("  打字机效果: %v\n", cfg.Display.TypewriterEffect)
+	fmt.Printf("  打字速度: %v\n", cfg.Display.TypingSpeed)
+	fmt.Printf("  彩色输出: %v\n", cfg.Display.ColorOutput)
 
-	fmt.Println("\nAdvanced Settings:")
-	fmt.Printf("  Cache Enabled: %v\n", cfg.Advanced.CacheEnabled)
-	fmt.Printf("  Cache TTL: %v\n", cfg.Advanced.CacheTTL)
-	fmt.Printf("  Log Level: %s\n", cfg.Advanced.LogLevel)
+	fmt.Println("\n高级设置:")
+	fmt.Printf("  缓存启用: %v\n", cfg.Advanced.CacheEnabled)
+	fmt.Printf("  缓存 TTL: %v\n", cfg.Advanced.CacheTTL)
+	fmt.Printf("  日志级别: %s\n", cfg.Advanced.LogLevel)
 }
 
 func init() {

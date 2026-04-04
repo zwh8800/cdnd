@@ -17,10 +17,10 @@ var loadSlot int
 // loadCmd 表示加载命令。
 var loadCmd = &cobra.Command{
 	Use:   "load",
-	Short: "Load a saved game",
-	Long: `Load a previously saved game from a save slot.
+	Short: "加载已保存的游戏",
+	Long: `从存档槽位加载之前保存的游戏。
 
-Example:
+示例:
   cdnd load --slot 1
   cdnd load -s 3`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -41,16 +41,16 @@ Example:
 		}
 
 		// 加载存档
-		fmt.Printf("Loading game from slot %d...\n", loadSlot)
+		fmt.Printf("正在从槽位 %d 加载游戏...\n", loadSlot)
 		if err := engine.LoadGame(loadSlot); err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading game: %v\n", err)
+			fmt.Fprintf(os.Stderr, "加载游戏失败: %v\n", err)
 			os.Exit(1)
 		}
 
 		// 显示存档信息
 		c := engine.GetCharacter()
 		if c != nil {
-			fmt.Printf("Loaded character: %s\n", c.Name)
+			fmt.Printf("已加载角色: %s\n", c.Name)
 		}
 
 		// 启动游戏 TUI
@@ -72,7 +72,7 @@ Example:
 // savesCmd 列出所有存档
 var savesCmd = &cobra.Command{
 	Use:   "saves",
-	Short: "List all save slots",
+	Short: "列出所有存档槽位",
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Get()
 
@@ -94,18 +94,18 @@ var savesCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		fmt.Println("Save Slots:")
+		fmt.Println("存档槽位:")
 		fmt.Println("===========")
 		for _, slot := range slots {
 			if slot.CharacterName != "" {
-				fmt.Printf("\nSlot %d:\n", slot.Slot)
-				fmt.Printf("  Character: %s (Level %d %s)\n", slot.CharacterName, slot.CharacterLevel, slot.CharacterClass)
-				fmt.Printf("  Phase: %s\n", slot.Phase.String())
-				fmt.Printf("  Location: %s\n", slot.Preview)
-				fmt.Printf("  Play Time: %d minutes\n", slot.PlayTime/60)
-				fmt.Printf("  Last Saved: %s\n", slot.UpdatedAt.Format("2006-01-02 15:04"))
+				fmt.Printf("\n槽位 %d:\n", slot.Slot)
+				fmt.Printf("  角色: %s (等级 %d %s)\n", slot.CharacterName, slot.CharacterLevel, slot.CharacterClass)
+				fmt.Printf("  阶段: %s\n", slot.Phase.String())
+				fmt.Printf("  位置: %s\n", slot.Preview)
+				fmt.Printf("  游玩时间: %d 分钟\n", slot.PlayTime/60)
+				fmt.Printf("  最后保存: %s\n", slot.UpdatedAt.Format("2006-01-02 15:04"))
 			} else {
-				fmt.Printf("\nSlot %d: [Empty]\n", slot.Slot)
+				fmt.Printf("\n槽位 %d: [空]\n", slot.Slot)
 			}
 		}
 	},
@@ -115,5 +115,5 @@ func init() {
 	rootCmd.AddCommand(loadCmd)
 	rootCmd.AddCommand(savesCmd)
 
-	loadCmd.Flags().IntVarP(&loadSlot, "slot", "s", 1, "save slot number")
+	loadCmd.Flags().IntVarP(&loadSlot, "slot", "s", 1, "存档槽位编号")
 }
