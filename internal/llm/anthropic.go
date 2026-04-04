@@ -2,7 +2,6 @@ package llm
 
 import (
 	"context"
-	"errors"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -103,11 +102,73 @@ func (p *AnthropicProvider) Generate(ctx context.Context, req *Request) (*Respon
 
 // GenerateStream 生成流式补全。
 func (p *AnthropicProvider) GenerateStream(ctx context.Context, req *Request) (<-chan StreamChunk, error) {
+	// 构建消息
+	messages := make([]anthropic.MessageParam, 0, len(req.Messages))
+	var systemPrompt string
+
+	for _, msg := range req.Messages {
+		switch msg.Role {
+		case RoleUser:
+			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(msg.Content)))
+		case RoleAssistant:
+			messages = append(messages, anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Content)))
+		case RoleSystem:
+			// 系统消息在 Anthropic SDK 中单独处理
+			systemPrompt = msg.Content
+		}
+	}
+
+	model := req.Model
+	if model == "" {
+		model = p.model
+	}
+
+	maxTokens := int64(req.MaxTokens)
+	if maxTokens == 0 {
+		maxTokens = int64(p.maxTokens)
+	}
+
+	// 构建流式请求参数
+	params := anthropic.MessageNewParams{
+		MaxTokens: maxTokens,
+		Messages:  messages,
+		Model:     model,
+	}
+
+	if systemPrompt != "" {
+		params.System = []anthropic.TextBlockParam{{Text: systemPrompt}}
+	}
+
+	// 创建流式请求
+	stream := p.client.Messages.NewStreaming(ctx, params)
+
 	chunkChan := make(chan StreamChunk, 100)
 
 	go func() {
 		defer close(chunkChan)
-		chunkChan <- StreamChunk{Error: errors.New("streaming not yet implemented for Anthropic")}
+
+		for stream.Next() {
+			event := stream.Current()
+
+			switch event.Type {
+			case "content_block_delta":
+				// 使用 AsContentBlockDelta 获取增量事件
+				delta := event.AsContentBlockDelta()
+				// 检查是否是文本增量
+				if delta.Delta.Type == "text_delta" {
+					chunkChan <- StreamChunk{
+						Content: delta.Delta.Text,
+					}
+				}
+			case "message_stop":
+				chunkChan <- StreamChunk{Done: true}
+				return
+			}
+		}
+
+		if err := stream.Err(); err != nil {
+			chunkChan <- StreamChunk{Error: err}
+		}
 	}()
 
 	return chunkChan, nil

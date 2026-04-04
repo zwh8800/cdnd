@@ -29,6 +29,10 @@ type GameModel struct {
 	output      []string
 	outputIndex int
 
+	// 流式输出缓冲区
+	streamingContent string
+	isStreaming      bool
+
 	// 状态
 	phase   save.GamePhase
 	loading bool
@@ -79,6 +83,39 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.phase = msg.Phase
 		}
 		return m, nil
+
+	case StreamChunkMsg:
+		// 处理流式数据块
+		if msg.Error != nil {
+			m.loading = false
+			m.isStreaming = false
+			m.err = msg.Error
+			m.output = append(m.output, fmt.Sprintf("错误: %v", msg.Error))
+			return m, nil
+		}
+
+		if msg.Done {
+			// 流式完成
+			m.loading = false
+			m.isStreaming = false
+			// 将完整内容添加到输出
+			if m.streamingContent != "" {
+				m.output = append(m.output, m.streamingContent)
+			}
+			m.streamingContent = ""
+			return m, nil
+		}
+
+		// 累积流式内容并继续等待下一个数据块
+		m.streamingContent += msg.Content
+		return m, waitForStreamChunks(msg.stream)
+
+	case StreamStartMsg:
+		// 开始流式输出
+		m.isStreaming = true
+		m.streamingContent = ""
+		// 开始接收流式数据块
+		return m, waitForStreamChunks(msg.Stream)
 	}
 
 	// 更新 textinput
@@ -129,16 +166,31 @@ func (m GameModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// processInput 处理输入命令
+// processInput 处理输入命令（流式版本）
 func (m GameModel) processInput(input string) tea.Cmd {
 	return func() tea.Msg {
-		resp, err := m.engine.ProcessPlayerInput(m.ctx, input)
+		stream, err := m.engine.ProcessPlayerInputStream(m.ctx, input)
 		if err != nil {
 			return DMResponseMsg{Err: err}
 		}
-		return DMResponseMsg{
-			Content: resp.Content,
-			Phase:   resp.Phase,
+
+		// 返回流式开始消息
+		return StreamStartMsg{Stream: stream}
+	}
+}
+
+// waitForStreamChunks 等待流式数据块
+func waitForStreamChunks(stream <-chan game.StreamChunk) tea.Cmd {
+	return func() tea.Msg {
+		chunk, ok := <-stream
+		if !ok {
+			return StreamChunkMsg{Done: true}
+		}
+		return StreamChunkMsg{
+			Content: chunk.Content,
+			Done:    chunk.Done,
+			Error:   chunk.Error,
+			stream:  stream,
 		}
 	}
 }
@@ -200,22 +252,33 @@ func (m GameModel) renderStatusBar() string {
 
 // renderOutput 渲染输出区域
 func (m GameModel) renderOutput(height int) string {
-	if len(m.output) == 0 {
+	if len(m.output) == 0 && !m.isStreaming {
 		return GameStyles.Box.Render("欢迎来到D&D冒险！输入你的行动开始游戏。")
+	}
+
+	// 构建输出内容
+	var lines []string
+	lines = append(lines, m.output...)
+
+	// 如果正在流式输出，添加当前流式内容
+	if m.isStreaming {
+		if m.streamingContent != "" {
+			lines = append(lines, m.streamingContent)
+		}
 	}
 
 	// 计算显示范围
 	start := 0
-	if len(m.output) > height {
-		start = len(m.output) - height
-	}
-
-	lines := m.output[start:]
 	if len(lines) > height {
-		lines = lines[len(lines)-height:]
+		start = len(lines) - height
 	}
 
-	content := strings.Join(lines, "\n")
+	displayLines := lines[start:]
+	if len(displayLines) > height {
+		displayLines = displayLines[len(displayLines)-height:]
+	}
+
+	content := strings.Join(displayLines, "\n")
 	return GameStyles.Box.Height(height).Render(content)
 }
 
@@ -232,6 +295,19 @@ type DMResponseMsg struct {
 	Content string
 	Phase   save.GamePhase
 	Err     error
+}
+
+// StreamStartMsg 流式开始消息
+type StreamStartMsg struct {
+	Stream <-chan game.StreamChunk
+}
+
+// StreamChunkMsg 流式数据块消息
+type StreamChunkMsg struct {
+	Content string
+	Done    bool
+	Error   error
+	stream  <-chan game.StreamChunk
 }
 
 // maxInt 辅助函数
