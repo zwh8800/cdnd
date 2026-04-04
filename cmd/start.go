@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -90,82 +89,8 @@ var startCmd = &cobra.Command{
 	},
 }
 
-// startGameCmd 直接开始游戏（使用已有角色）
-var startGameCmd = &cobra.Command{
-	Use:   "game",
-	Short: "使用已有角色开始游戏",
-	Run: func(cmd *cobra.Command, args []string) {
-		cfg := config.Get()
-
-		provider, err := llm.NewProvider(cfg)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating LLM provider: %v\n", err)
-			os.Exit(1)
-		}
-
-		engine, err := game.NewEngine(cfg, provider)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating game engine: %v\n", err)
-			os.Exit(1)
-		}
-
-		// 尝试加载存档
-		if err := engine.LoadGame(startSaveSlot); err != nil {
-			fmt.Fprintf(os.Stderr, "Error loading save: %v\n", err)
-			fmt.Println("Use 'cdnd start' to create a new character first.")
-			os.Exit(1)
-		}
-
-		// 启动游戏 TUI
-		gameModel := ui.NewGameModel(engine)
-		p := tea.NewProgram(gameModel, tea.WithAltScreen())
-
-		if _, err := p.Run(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error running game: %v\n", err)
-			os.Exit(1)
-		}
-
-		// 游戏结束后保存
-		if err := engine.SaveGame(startSaveSlot); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Failed to save game: %v\n", err)
-		}
-	},
-}
-
-// testLLMCmd 测试 LLM 连接
-var testLLMCmd = &cobra.Command{
-	Use:   "test-llm",
-	Short: "测试 LLM 连接",
-	Run: func(cmd *cobra.Command, args []string) {
-		cfg := config.Get()
-
-		provider, err := llm.NewProvider(cfg)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating LLM provider: %v\n", err)
-			os.Exit(1)
-		}
-
-		fmt.Printf("正在测试与 %s 的连接...\n", cfg.LLM.DefaultProvider)
-
-		resp, err := provider.Generate(context.Background(), &llm.Request{
-			Messages: []llm.Message{
-				{Role: llm.RoleUser, Content: "Say 'Hello, adventurer!' in Chinese."},
-			},
-		})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-
-		fmt.Println("响应:")
-		fmt.Println(resp.Content)
-	},
-}
-
 func init() {
 	rootCmd.AddCommand(startCmd)
-	startCmd.AddCommand(startGameCmd)
-	startCmd.AddCommand(testLLMCmd)
 
 	startCmd.Flags().IntVarP(&startSaveSlot, "save-slot", "s", 1, "存档槽位编号（1-10）")
 	startCmd.Flags().StringVarP(&startScenario, "scenario", "S", "default", "要游玩的剧本")

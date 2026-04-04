@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/zwh8800/cdnd/internal/config"
+	"github.com/zwh8800/cdnd/internal/llm"
 )
 
 // providerCmd 表示提供者命令组。
@@ -58,7 +60,7 @@ var providerTestCmd = &cobra.Command{
 		cfg := config.Get()
 
 		// 检查提供者是否存在
-		provider, exists := cfg.LLM.Providers[providerName]
+		providerConfig, exists := cfg.LLM.Providers[providerName]
 		if !exists {
 			fmt.Fprintf(os.Stderr, "未知的提供者: %s\n", providerName)
 			fmt.Fprintln(os.Stderr, "可用的提供者: openai, anthropic, ollama")
@@ -66,10 +68,28 @@ var providerTestCmd = &cobra.Command{
 		}
 
 		fmt.Printf("正在测试与 %s 的连接...\n", providerName)
-		fmt.Printf("模型: %s\n", provider.Model)
+		fmt.Printf("模型: %s\n", providerConfig.Model)
 
-		// TODO: 实现实际连接测试
-		fmt.Println("\n连接测试尚未实现，敬请期待！")
+		// 创建 LLM 提供者实例
+		provider, err := llm.NewProvider(cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating LLM provider: %v\n", err)
+			os.Exit(1)
+		}
+
+		// 发送测试请求
+		resp, err := provider.Generate(context.Background(), &llm.Request{
+			Messages: []llm.Message{
+				{Role: llm.RoleUser, Content: "Say 'Hello, adventurer!' in Chinese."},
+			},
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("响应:")
+		fmt.Println(resp.Content)
 	},
 }
 
