@@ -228,6 +228,7 @@ func (e *Engine) ProcessWithTools(ctx context.Context, input string) (*DMRespons
 	// 3. Agentic Loop (最多10次迭代)
 	const maxIterations = 10
 	var allToolCalls []tools.ToolCall
+	var allNarratives []string
 
 	for i := 0; i < maxIterations; i++ {
 		// 3.1 调用 LLM
@@ -246,9 +247,10 @@ func (e *Engine) ProcessWithTools(ctx context.Context, input string) (*DMRespons
 			e.state.AddHistory(llm.Message{Role: llm.RoleUser, Content: input})
 			e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: resp.Content})
 			return &DMResponse{
-				Content:   resp.Content,
-				Phase:     e.state.GetPhase(),
-				ToolCalls: allToolCalls,
+				Content:        resp.Content,
+				Phase:          e.state.GetPhase(),
+				ToolCalls:      allToolCalls,
+				ToolNarratives: allNarratives,
 			}, nil
 		}
 
@@ -272,18 +274,12 @@ func (e *Engine) ProcessWithTools(ctx context.Context, input string) (*DMRespons
 				args = make(map[string]interface{})
 			}
 
-			// 打印工具执行前的分隔线
-			fmt.Println("\n┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓")
-
 			// 执行工具
 			result, err := e.toolRegistry.Execute(ctx, tc.Name, args)
 
-			// 生成并打印 D&D 风格叙述
+			// 生成 D&D 风格叙述
 			narrative := e.generateToolNarrative(tc.Name, args, result, err)
-			fmt.Print(narrative)
-
-			// 打印结束分隔线
-			fmt.Println("┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛")
+			allNarratives = append(allNarratives, narrative)
 
 			// 分发工具执行事件
 			e.events.Dispatch(Event{
@@ -408,9 +404,10 @@ func (e *Engine) GetSaveSlots() ([]*save.SaveSlot, error) {
 
 // DMResponse DM响应
 type DMResponse struct {
-	Content   string           `json:"content"`
-	Phase     save.GamePhase   `json:"phase"`
-	ToolCalls []tools.ToolCall `json:"tool_calls,omitempty"`
+	Content        string           `json:"content"`
+	Phase          save.GamePhase   `json:"phase"`
+	ToolCalls      []tools.ToolCall `json:"tool_calls,omitempty"`
+	ToolNarratives []string         `json:"tool_narratives,omitempty"` // D&D风格工具执行叙述
 }
 
 // StreamChunk 流式响应数据块
@@ -527,24 +524,44 @@ func (e *Engine) generateToolNarrative(toolName string, args map[string]interfac
 		statusMarker = "⚠️ "
 	}
 
+	// 添加明显的工具调用标记
+	sb.WriteString("\n")
+	sb.WriteString("╔════════════════════════════════════════════════════════════════╗\n")
+	sb.WriteString(fmt.Sprintf("║  ⚙️  工具调用: %-48s║\n", toolName))
+	sb.WriteString("╠════════════════════════════════════════════════════════════════╣\n")
+
 	// 生成叙述标题
+	sb.WriteString("║  ")
 	sb.WriteString(statusMarker)
 	sb.WriteString(getToolNarrativeHeader(toolName, toolCategory))
 	sb.WriteString("\n")
 
-	// 根据工具类型生成不同的叙述内容
+	// 根据工具类型生成不同的叙述内容（带前缀）
+	narrativeContent := ""
 	switch toolCategory {
 	case "dice":
-		sb.WriteString(generateDiceNarrative(toolName, args, result, execErr))
+		narrativeContent = generateDiceNarrative(toolName, args, result, execErr)
 	case "character":
-		sb.WriteString(generateCharacterNarrative(toolName, args, result, execErr))
+		narrativeContent = generateCharacterNarrative(toolName, args, result, execErr)
 	case "item":
-		sb.WriteString(generateItemNarrative(toolName, args, result, execErr))
+		narrativeContent = generateItemNarrative(toolName, args, result, execErr)
 	case "world":
-		sb.WriteString(generateWorldNarrative(toolName, args, result, execErr))
+		narrativeContent = generateWorldNarrative(toolName, args, result, execErr)
 	default:
-		sb.WriteString(generateGenericNarrative(toolName, args, result, execErr))
+		narrativeContent = generateGenericNarrative(toolName, args, result, execErr)
 	}
+
+	// 为每行添加边框前缀
+	lines := strings.Split(narrativeContent, "\n")
+	for _, line := range lines {
+		if line != "" {
+			sb.WriteString("║  ")
+			sb.WriteString(line)
+			sb.WriteString("\n")
+		}
+	}
+
+	sb.WriteString("╚════════════════════════════════════════════════════════════════╝\n")
 
 	return sb.String()
 }

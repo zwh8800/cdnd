@@ -79,6 +79,11 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.Err
 			m.output = append(m.output, fmt.Sprintf("错误: %v", msg.Err))
 		} else {
+			// 先显示工具叙述
+			for _, narrative := range msg.ToolNarratives {
+				m.output = append(m.output, narrative)
+			}
+			// 再显示DM响应内容
 			m.output = append(m.output, msg.Content)
 			m.phase = msg.Phase
 		}
@@ -173,7 +178,11 @@ func (m GameModel) processInput(input string) tea.Cmd {
 		if err != nil {
 			return DMResponseMsg{Err: err}
 		}
-		return DMResponseMsg{Content: resp.Content, Phase: resp.Phase}
+		return DMResponseMsg{
+			Content:        resp.Content,
+			Phase:          resp.Phase,
+			ToolNarratives: resp.ToolNarratives,
+		}
 	}
 }
 
@@ -290,9 +299,10 @@ func (m GameModel) renderInput() string {
 
 // DMResponseMsg DM响应消息
 type DMResponseMsg struct {
-	Content string
-	Phase   save.GamePhase
-	Err     error
+	Content        string
+	Phase          save.GamePhase
+	ToolNarratives []string
+	Err            error
 }
 
 // StreamStartMsg 流式开始消息
