@@ -668,22 +668,42 @@ func generateDiceNarrative(toolName string, args map[string]interface{}, result 
 
 	// 提取骰子结果信息
 	if data, ok := result.Data.(map[string]interface{}); ok {
-		if total, ok := data["total"].(float64); ok {
-			if toolName == "skill_check" || toolName == "saving_throw" {
-				var dc int
-				if dcVal, ok := data["dc"].(float64); ok {
-					dc = int(dcVal)
-				}
+		// 支持 int 和 float64 两种类型
+		var total int
+		var hasTotal bool
+		if totalFloat, ok := data["total"].(float64); ok {
+			total = int(totalFloat)
+			hasTotal = true
+		} else if totalInt, ok := data["total"].(int); ok {
+			total = totalInt
+			hasTotal = true
+		}
+
+		if toolName == "skill_check" || toolName == "saving_throw" {
+			var dc int
+			var hasDC bool
+			if dcFloat, ok := data["dc"].(float64); ok {
+				dc = int(dcFloat)
+				hasDC = true
+			} else if dcInt, ok := data["dc"].(int); ok {
+				dc = dcInt
+				hasDC = true
+			}
+			if hasTotal && hasDC {
 				if result.Success {
-					sb.WriteString(fmt.Sprintf("  └─ 🎉 检定成功！投出 %d (DC %d)\n", int(total), dc))
+					sb.WriteString(fmt.Sprintf("  └─ 🎉 检定成功！投出 %d (DC %d)\n", total, dc))
 					sb.WriteString("     命运眷顾着这位冒险者...\n")
 				} else {
-					sb.WriteString(fmt.Sprintf("  └─ 💔 检定失败。投出 %d (DC %d)\n", int(total), dc))
+					sb.WriteString(fmt.Sprintf("  └─ 💔 检定失败。投出 %d (DC %d)\n", total, dc))
 					sb.WriteString("     命运之线似乎在此时断裂...\n")
 				}
-			} else {
-				sb.WriteString(fmt.Sprintf("  └─ 骰子落地：**%d**\n", int(total)))
+			} else if result.Narrative != "" {
+				sb.WriteString(fmt.Sprintf("  └─ %s\n", result.Narrative))
 			}
+		} else if hasTotal {
+			sb.WriteString(fmt.Sprintf("  └─ 骰子落地：**%d**\n", total))
+		} else if result.Narrative != "" {
+			sb.WriteString(fmt.Sprintf("  └─ %s\n", result.Narrative))
 		}
 	} else if result.Narrative != "" {
 		sb.WriteString(fmt.Sprintf("  └─ %s\n", result.Narrative))
