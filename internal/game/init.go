@@ -58,7 +58,7 @@ func (e *Engine) ShowWelcomeMessage() (string, error) {
 	coloredWelcome := prompt.ParseColorMarkers(welcomeMsg)
 	e.state.AddHistory(llm.Message{
 		Role:    llm.RoleAssistant,
-		Content: coloredWelcome,
+		Content: welcomeMsg,
 	})
 
 	return coloredWelcome, nil

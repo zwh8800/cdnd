@@ -258,7 +258,7 @@ func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error)
 			// 更新状态中的选项
 			e.state.SetCurrentOptions(options)
 
-			e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: coloredContent})
+			e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: resp.Content})
 			return &DMResponse{
 				Content:        coloredContent,
 				Phase:          e.state.GetPhase(),

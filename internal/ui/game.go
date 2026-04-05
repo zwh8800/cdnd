@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/zwh8800/cdnd/internal/game"
+	"github.com/zwh8800/cdnd/internal/llm/prompt"
 	"github.com/zwh8800/cdnd/internal/save"
 )
 
@@ -306,8 +307,8 @@ func (m *GameModel) restoreHistory() {
 			m.lines = append(m.lines, separator)
 			m.lines = append(m.lines, "> "+msg.Content)
 		case "assistant":
-			// DM响应，直接添加（已包含ANSI颜色代码）
-			m.lines = append(m.lines, msg.Content)
+			// DM响应，直接添加（未包含ANSI颜色代码）
+			m.lines = append(m.lines, prompt.ParseColorMarkers(msg.Content))
 		case "tool":
 			// 工具消息，跳过（不应出现在最终显示中）
 			continue
@@ -377,6 +378,7 @@ func (m *GameModel) updateOptions(options []string) {
 		items = append(items, optionItem(otherOptionLabel))
 
 		m.optionsList.SetItems(items)
+		m.optionsList.ResetSelected()
 	} else {
 		// 无选项时切换到文本模式
 		m.inputMode = inputModeText
