@@ -348,7 +348,7 @@ func (m *GameModel) processInput(input string) tea.Cmd {
 // handleInput 统一处理输入（无论是选择还是文本输入）
 func (m *GameModel) handleInput(input string) (tea.Model, tea.Cmd) {
 	// 添加玩家输入到输出
-	m.lines = append(m.lines, fmt.Sprintf(strings.Repeat("-", m.windowWidth-1)+"\n> %s", input))
+	m.lines = append(m.lines, fmt.Sprintf(strings.Repeat("-", m.windowWidth-4)+"\n> %s", input))
 	m.updateViewportContent()
 	m.viewport.PageDown()
 

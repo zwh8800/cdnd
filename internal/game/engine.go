@@ -73,7 +73,6 @@ func (e *Engine) registerTools() {
 	e.toolRegistry.Register(tools.NewRemoveNPCTool(e.state))
 	e.toolRegistry.Register(tools.NewSetFlagTool(e.state))
 	e.toolRegistry.Register(tools.NewGetFlagTool(e.state))
-	e.toolRegistry.Register(tools.NewSetOptionsTool(e.state))
 }
 
 // Start 开始新游戏
@@ -249,15 +248,23 @@ func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error)
 		if len(resp.ToolCalls) == 0 {
 			// 没有工具调用，返回最终响应
 			e.state.AddHistory(llm.Message{Role: llm.RoleUser, Content: input})
+
+			// 解析选项（仅用于提取选项列表，不改变原始内容）
+			options, _ := prompt.ParseOptions(resp.Content)
+
 			// 解析颜色标记，将标记转换为ANSI颜色代码
 			coloredContent := prompt.ParseColorMarkers(resp.Content)
+
+			// 更新状态中的选项
+			e.state.SetCurrentOptions(options)
+
 			e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: coloredContent})
 			return &DMResponse{
 				Content:        coloredContent,
 				Phase:          e.state.GetPhase(),
 				ToolCalls:      allToolCalls,
 				ToolNarratives: allNarratives,
-				Options:        e.state.GetCurrentOptions(),
+				Options:        options,
 			}, nil
 		}
 

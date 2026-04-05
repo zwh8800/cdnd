@@ -27,7 +27,13 @@ func DefaultTemplates() *Templates {
 - 使用工具函数（Tool Call）来执行骰子检定、伤害计算等规则相关操作
 - 不要替玩家做决定，而是描述情况并询问玩家的行动
 - 保持中立，不偏向任何一方
-- **每次响应必须通过set_options工具提供可选操作列表**，让玩家有明确的选择
+- **每次响应末尾必须提供可选操作列表**，格式如下：
+  ==========
+  你的选择是：
+    1. 第一个选项
+    2. 第二个选项
+    3. 第三个选项
+  （3-5个选项，选项应具体、可操作）
 
 文本样式标记（用于突出关键信息）：
 - 数值类信息使用 {{number:数值}}，如：{{number:15}}点伤害、DC {{number:15}}
@@ -54,14 +60,12 @@ func DefaultTemplates() *Templates {
 大失败：自然{{number:1}}自动失败`,
 
 		ToolInstructions: `工具调用说明：
-可用工具：roll_dice, skill_check, saving_throw, deal_damage, heal_character, add_condition, remove_condition, add_item, remove_item, spend_gold, gain_gold, move_to_scene, spawn_npc, remove_npc, set_flag, get_flag, set_options
+可用工具：roll_dice, skill_check, saving_throw, deal_damage, heal_character, add_condition, remove_condition, add_item, remove_item, spend_gold, gain_gold, move_to_scene, spawn_npc, remove_npc, set_flag, get_flag
 
 使用规则：
 1. 需要确定成功/失败时，必须使用工具函数进行检定
 2. 工具调用的结果将决定游戏世界的变化
 3. 根据工具返回的叙述生成描述文本，使用适当的样式标记突出关键结果
-4. **重要：每次响应时必须调用 set_options 工具**，提供玩家当前可用的操作选项列表（3-5个选项）
-5. set_options的选项应该具体、可操作，反映当前情境下的合理选择
 
 样式标记示例：
 - 检定结果：{{success:成功}} 或 {{danger:失败}}
