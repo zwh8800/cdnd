@@ -19,6 +19,10 @@ type StateAccessor interface {
 	// 计数器
 	GetCounter(key string) int
 	SetCounter(key string, value int)
+
+	// 当前选项
+	SetCurrentOptions(options []string)
+	GetCurrentOptions() []string
 }
 
 // Tool 工具接口

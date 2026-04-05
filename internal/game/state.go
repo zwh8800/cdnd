@@ -35,6 +35,9 @@ type State struct {
 	// 战斗状态
 	Combat *save.CombatState `json:"combat,omitempty"`
 
+	// 当前可用的操作选项（由DM通过set_options工具设置）
+	CurrentOptions []string `json:"current_options,omitempty"`
+
 	// 时间戳
 	CreatedAt   time.Time `json:"created_at"`
 	LastSavedAt time.Time `json:"last_saved_at"`
@@ -221,6 +224,21 @@ func (s *State) GetCurrentCombatant() *save.Combatant {
 		return s.Combat.Participants[s.Combat.CurrentTurn]
 	}
 	return nil
+}
+
+// SetCurrentOptions 设置当前选项
+func (s *State) SetCurrentOptions(options []string) {
+	s.CurrentOptions = options
+}
+
+// GetCurrentOptions 获取当前选项
+func (s *State) GetCurrentOptions() []string {
+	return s.CurrentOptions
+}
+
+// ClearCurrentOptions 清除当前选项
+func (s *State) ClearCurrentOptions() {
+	s.CurrentOptions = nil
 }
 
 // sortInitiative 按先攻值排序（高到低）

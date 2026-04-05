@@ -73,6 +73,7 @@ func (e *Engine) registerTools() {
 	e.toolRegistry.Register(tools.NewRemoveNPCTool(e.state))
 	e.toolRegistry.Register(tools.NewSetFlagTool(e.state))
 	e.toolRegistry.Register(tools.NewGetFlagTool(e.state))
+	e.toolRegistry.Register(tools.NewSetOptionsTool(e.state))
 }
 
 // Start 开始新游戏
@@ -196,6 +197,7 @@ func (e *Engine) GetCurrentScene() *world.Scene {
 // 实现完整的 Agentic Loop：调用LLM -> 执行工具 -> 反馈结果 -> 循环
 func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error) {
 	e.state.IncrementTurn()
+	e.state.ClearCurrentOptions()
 
 	// 1. 获取工具定义并转换为 LLM 格式
 	toolDefs := e.toolRegistry.GetToolDefinitions()
@@ -255,6 +257,7 @@ func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error)
 				Phase:          e.state.GetPhase(),
 				ToolCalls:      allToolCalls,
 				ToolNarratives: allNarratives,
+				Options:        e.state.GetCurrentOptions(),
 			}, nil
 		}
 
@@ -313,14 +316,6 @@ func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error)
 
 	// 超过最大迭代次数，返回错误
 	return nil, fmt.Errorf("工具调用超过最大迭代次数 (%d)", maxIterations)
-}
-
-// buildMessages 构建LLM消息
-func (e *Engine) buildMessages(ctx *prompt.GameContext, input string) []llm.Message {
-	messages := []llm.Message{{Role: llm.RoleSystem, Content: e.prompt.BuildSystemPrompt(ctx)}}
-	messages = append(messages, e.prompt.BuildHistoryContext(ctx.History, 20)...)
-	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: input})
-	return messages
 }
 
 // RollDice 投骰子
@@ -412,6 +407,7 @@ type DMResponse struct {
 	Phase          save.GamePhase   `json:"phase"`
 	ToolCalls      []tools.ToolCall `json:"tool_calls,omitempty"`
 	ToolNarratives []string         `json:"tool_narratives,omitempty"` // D&D风格工具执行叙述
+	Options        []string         `json:"options,omitempty"`         // 当前可用选项
 }
 
 // StreamChunk 流式响应数据块

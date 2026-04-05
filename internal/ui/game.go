@@ -3,18 +3,59 @@ package ui
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/zwh8800/cdnd/internal/game"
 	"github.com/zwh8800/cdnd/internal/save"
 )
 
 // 加载动画常量
 var brailleFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠦"}
+
+// 输入模式常量
+const (
+	inputModeText   = "text"   // 文本输入模式
+	inputModeSelect = "select" // 选择模式
+)
+
+// 切换到文本输入的选项标签
+const otherOptionLabel = "其他行动..."
+
+// optionItem 选项列表项
+type optionItem string
+
+func (i optionItem) FilterValue() string { return "" }
+
+// optionDelegate 自定义选项列表委托
+type optionDelegate struct {
+	normalStyle   lipgloss.Style
+	selectedStyle lipgloss.Style
+}
+
+func (d optionDelegate) Height() int                             { return 1 }
+func (d optionDelegate) Spacing() int                            { return 0 }
+func (d optionDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+func (d optionDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
+	i, ok := listItem.(optionItem)
+	if !ok {
+		return
+	}
+
+	str := fmt.Sprintf("%d. %s", index+1, string(i))
+
+	if index == m.Index() {
+		fmt.Fprint(w, d.selectedStyle.Render("> "+str))
+	} else {
+		fmt.Fprint(w, d.normalStyle.Render(str))
+	}
+}
 
 // GameModel 游戏主界面模型
 type GameModel struct {
@@ -39,7 +80,10 @@ type GameModel struct {
 	loadingFrame       int // Braille 动画帧索引 (0-5)
 	loadingTimer       int // 进度点动画帧 (0-3)
 	loading            bool
-	loadingPhraseCount int // 加载文案计数器
+	loadingPhraseCount int    // 加载文案计数器
+	inputMode          string // "text" 或 "select"
+	optionsList        list.Model
+	currentOptions     []string
 }
 
 // NewGameModel 创建游戏模型
@@ -51,6 +95,18 @@ func NewGameModel(engine *game.Engine) *GameModel {
 	vp := viewport.New(0, 0)
 	vp.SetHorizontalStep(10)
 
+	// 初始化选项列表（使用自定义delegate支持翻页）
+	opts := []list.Item{}
+	delegate := optionDelegate{
+		normalStyle:   lipgloss.NewStyle().PaddingLeft(4),
+		selectedStyle: lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("170")),
+	}
+	optionsList := list.New(opts, delegate, 0, 1)
+	optionsList.SetShowStatusBar(false)
+	optionsList.SetFilteringEnabled(false)
+	optionsList.SetShowHelp(false)
+	optionsList.SetShowTitle(false)
+
 	return &GameModel{
 		engine:          engine,
 		ctx:             context.Background(),
@@ -58,6 +114,9 @@ func NewGameModel(engine *game.Engine) *GameModel {
 		inputBox:        ti,
 		viewport:        vp,
 		statusBarHeight: 2,
+		inputMode:       inputModeText,
+		optionsList:     optionsList,
+		currentOptions:  []string{},
 	}
 }
 
@@ -82,6 +141,15 @@ func (m *GameModel) Init() tea.Cmd {
 	}
 }
 
+// getInputHeight 根据输入模式获取输入区域高度
+func (m *GameModel) getInputHeight() int {
+	if m.inputMode == inputModeSelect {
+		return 5
+	} else {
+		return 3
+	}
+}
+
 // Update 更新
 func (m *GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
@@ -97,7 +165,17 @@ func (m *GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		// 处理特殊按键
 		switch msg.Type {
-		case tea.KeyCtrlC, tea.KeyEsc:
+		case tea.KeyCtrlC:
+			return m, tea.Quit
+
+		case tea.KeyEsc:
+			// 如果在文本输入模式且有可用选项，切换到选择模式
+			if m.inputMode == inputModeText && len(m.currentOptions) > 0 && !m.loading {
+				m.inputMode = inputModeSelect
+				m.recalculateViewport()
+				return m, nil
+			}
+			// 否则退出程序
 			return m, tea.Quit
 
 		case tea.KeyTab:
@@ -115,28 +193,50 @@ func (m *GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.loading {
 				return m, nil
 			}
-			if m.inputBox.Value() == "" {
+
+			// 选择模式下的Enter处理
+			if m.inputMode == inputModeSelect {
+				selected := m.optionsList.SelectedItem()
+				if selected != nil {
+					item := selected.(optionItem)
+					if string(item) == otherOptionLabel {
+						// 切换到文本输入模式
+						m.inputMode = inputModeText
+						m.recalculateViewport()
+						return m, nil
+					}
+					// 发送选中选项作为输入
+					return m.handleInput(string(item))
+				}
 				return m, nil
 			}
 
-			// 添加玩家输入到输出
-			m.lines = append(m.lines, fmt.Sprintf(strings.Repeat("-", m.windowWidth)+"\n> %s", m.inputBox.Value()))
-			m.updateViewportContent()
-			m.viewport.PageDown()
+			// 文本输入模式下的Enter处理
+			if m.inputMode == inputModeText {
+				if m.inputBox.Value() == "" {
+					return m, nil
+				}
+				return m.handleInput(m.inputBox.Value())
+			}
 
-			// 发送到引擎
-			input := m.inputBox.Value()
-			m.inputBox.SetValue("")
-			m.loading = true
-			m.loadingFrame = 0
-			m.loadingTimer = 0
-			return m, tea.Batch(append(cmds, m.processInput(input), m.startLoadingAnimation())...)
+		case tea.KeyLeft, tea.KeyRight:
+			// 选择模式下，上下键由optionsList处理（支持翻页）
+			if m.inputMode == inputModeSelect && !m.loading && len(m.currentOptions) > 0 {
+				m.optionsList, cmd = m.optionsList.Update(msg)
+				if cmd != nil {
+					cmds = append(cmds, cmd)
+				}
+				return m, tea.Batch(cmds...)
+			}
+			// 其他情况由viewport处理
 		}
 
-		// 其他按键交给 textinput 处理
-		m.inputBox, cmd = m.inputBox.Update(msg)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
+		// 文本输入模式下，其他按键交给 textinput 处理
+		if m.inputMode == inputModeText {
+			m.inputBox, cmd = m.inputBox.Update(msg)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 		}
 
 	case tea.WindowSizeMsg:
@@ -156,6 +256,8 @@ func (m *GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// 再显示DM响应内容
 			m.lines = append(m.lines, msg.Content)
 			m.phase = msg.Phase
+			// 更新选项
+			m.updateOptions(msg.Options)
 		}
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
@@ -163,6 +265,7 @@ func (m *GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case LoadingTickMsg:
 		// 更新加载动画帧
 		if m.loading {
+			m.inputMode = inputModeText
 			m.loadingFrame = (m.loadingFrame + 1) % 6
 			m.loadingTimer = (m.loadingTimer + 1) % 4
 			m.loadingPhraseCount++ // 每次tick增加计数器
@@ -222,6 +325,7 @@ type DMResponseMsg struct {
 	Content        string
 	Phase          save.GamePhase
 	ToolNarratives []string
+	Options        []string
 	Err            error
 }
 
@@ -236,7 +340,46 @@ func (m *GameModel) processInput(input string) tea.Cmd {
 			Content:        resp.Content,
 			Phase:          resp.Phase,
 			ToolNarratives: resp.ToolNarratives,
+			Options:        resp.Options,
 		}
+	}
+}
+
+// handleInput 统一处理输入（无论是选择还是文本输入）
+func (m *GameModel) handleInput(input string) (tea.Model, tea.Cmd) {
+	// 添加玩家输入到输出
+	m.lines = append(m.lines, fmt.Sprintf(strings.Repeat("-", m.windowWidth-1)+"\n> %s", input))
+	m.updateViewportContent()
+	m.viewport.PageDown()
+
+	// 重置输入状态
+	m.inputBox.SetValue("")
+	m.loading = true
+	m.loadingFrame = 0
+	m.loadingTimer = 0
+
+	return m, tea.Batch(m.processInput(input), m.startLoadingAnimation())
+}
+
+// updateOptions 更新当前选项
+func (m *GameModel) updateOptions(options []string) {
+	m.currentOptions = options
+
+	if len(options) > 0 {
+		// 有选项时切换到选择模式
+		m.inputMode = inputModeSelect
+
+		// 构建列表项（添加"其他行动..."选项）
+		items := make([]list.Item, 0, len(options)+1)
+		for _, opt := range options {
+			items = append(items, optionItem(opt))
+		}
+		items = append(items, optionItem(otherOptionLabel))
+
+		m.optionsList.SetItems(items)
+	} else {
+		// 无选项时切换到文本模式
+		m.inputMode = inputModeText
 	}
 }
 
@@ -252,13 +395,13 @@ func (m *GameModel) startLoadingAnimation() tea.Cmd {
 
 // recalculateViewport 重新计算视口尺寸
 func (m *GameModel) recalculateViewport() {
-	// 计算 UI 组件高度
-	inputBoxHeight := 3
+	// 根据输入模式动态计算高度
+	inputHeight := m.getInputHeight()
 	separatorHeight := 1
 
 	// GameStyles.Box 有 Border(RoundedBorder) 和 Padding(0, 1)
 	// Border 占 2 行高度（上下各 1）
-	viewportHeight := m.windowHeight - m.statusBarHeight - inputBoxHeight - separatorHeight - 2
+	viewportHeight := m.windowHeight - m.statusBarHeight - inputHeight - separatorHeight - 2
 	viewportWidth := m.windowWidth - 4 // 左右 border(2) + padding(2)
 
 	if viewportHeight < 1 {
@@ -271,6 +414,9 @@ func (m *GameModel) recalculateViewport() {
 	m.viewport.Width = viewportWidth
 	m.viewport.Height = viewportHeight
 	m.inputBox.Width = m.windowWidth - 7
+
+	// 更新选项列表尺寸
+	m.optionsList.SetWidth(m.windowWidth - 4)
 
 	m.updateViewportContent()
 }
@@ -289,8 +435,9 @@ func (m *GameModel) View() string {
 	b.WriteString(m.renderStatusBar())
 	b.WriteString("\n")
 
-	// 主输出区域
-	outputHeight := m.windowHeight - m.statusBarHeight - 4 // 预留输入栏、边框等
+	// 主输出区域 - 根据输入模式动态计算高度
+	inputHeight := m.getInputHeight()
+	outputHeight := m.windowHeight - m.statusBarHeight - inputHeight - 1 // 1行分隔符
 	b.WriteString(m.renderStoryBox(outputHeight))
 	b.WriteString("\n")
 
@@ -318,6 +465,9 @@ func (m *GameModel) renderStatusBar() string {
 func (m *GameModel) renderStoryBox(height int) string {
 	// 直接使用 viewport 的 View() 方法
 	// 注意：内容已经在 Update 中通过 updateViewportContent 设置
+	if height < 1 {
+		height = 1
+	}
 	return GameStyles.Box.Height(height).Render(m.viewport.View())
 }
 
@@ -354,5 +504,11 @@ func (m *GameModel) renderInputBox() string {
 		loadingText := fmt.Sprintf("%s %s %s", braille, loadingPhrases[phraseIndex], progressDots)
 		return GameStyles.InputBox.Render(loadingText)
 	}
-	return GameStyles.InputBox.Render(m.inputBox.View())
+
+	// 选择模式：显示选项列表（支持翻页）
+	if m.inputMode == inputModeSelect {
+		return GameStyles.InputBox.Render(m.optionsList.View())
+	} else {
+		return GameStyles.InputBox.Render(m.inputBox.View())
+	}
 }
