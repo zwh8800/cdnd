@@ -4,12 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
 )
 
 // Registry 工具注册表
 type Registry struct {
-	mu          sync.RWMutex
 	tools       map[string]Tool
 	permissions map[string][]string // 工具 -> 允许的游戏阶段
 }
@@ -24,8 +22,6 @@ func NewRegistry() *Registry {
 
 // Register 注册工具
 func (r *Registry) Register(tool Tool, allowedPhases ...string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.tools[tool.Name()] = tool
 	if len(allowedPhases) > 0 {
 		r.permissions[tool.Name()] = allowedPhases
@@ -34,17 +30,13 @@ func (r *Registry) Register(tool Tool, allowedPhases ...string) {
 
 // Get 获取工具
 func (r *Registry) Get(name string) (Tool, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	tool, ok := r.tools[name]
 	return tool, ok
 }
 
 // Execute 执行工具
 func (r *Registry) Execute(ctx context.Context, name string, args map[string]interface{}) (*ToolResult, error) {
-	r.mu.RLock()
 	tool, ok := r.tools[name]
-	r.mu.RUnlock()
 
 	if !ok {
 		return nil, ErrToolNotFound
@@ -66,9 +58,6 @@ func (r *Registry) ExecuteFromJSON(ctx context.Context, name string, argsJSON st
 
 // GetToolDefinitions 获取所有工具定义（用于 LLM API）
 func (r *Registry) GetToolDefinitions() []*ToolDefinition {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
 	definitions := make([]*ToolDefinition, 0, len(r.tools))
 	for _, tool := range r.tools {
 		definitions = append(definitions, ToDefinition(tool))
@@ -78,9 +67,6 @@ func (r *Registry) GetToolDefinitions() []*ToolDefinition {
 
 // ListTools 列出所有工具名称
 func (r *Registry) ListTools() []string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
 	names := make([]string, 0, len(r.tools))
 	for name := range r.tools {
 		names = append(names, name)
@@ -90,17 +76,12 @@ func (r *Registry) ListTools() []string {
 
 // HasTool 检查工具是否存在
 func (r *Registry) HasTool(name string) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	_, ok := r.tools[name]
 	return ok
 }
 
 // IsAllowedInPhase 检查工具在指定阶段是否允许
 func (r *Registry) IsAllowedInPhase(name string, phase string) bool {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
 	phases, ok := r.permissions[name]
 	if !ok {
 		// 没有权限限制，默认允许
@@ -117,15 +98,11 @@ func (r *Registry) IsAllowedInPhase(name string, phase string) bool {
 
 // Clear 清除所有工具
 func (r *Registry) Clear() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.tools = make(map[string]Tool)
 	r.permissions = make(map[string][]string)
 }
 
 // ToolCount 返回工具数量
 func (r *Registry) ToolCount() int {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	return len(r.tools)
 }

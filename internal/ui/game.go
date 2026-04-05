@@ -228,7 +228,7 @@ type DMResponseMsg struct {
 // processInput 处理输入命令（使用 Tool Call 版本）
 func (m *GameModel) processInput(input string) tea.Cmd {
 	return func() tea.Msg {
-		resp, err := m.engine.ProcessWithTools(m.ctx, input)
+		resp, err := m.engine.Process(m.ctx, input)
 		if err != nil {
 			return DMResponseMsg{Err: err}
 		}

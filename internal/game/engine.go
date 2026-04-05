@@ -192,9 +192,9 @@ func (e *Engine) GetCurrentScene() *world.Scene {
 	return e.state.GetCurrentScene()
 }
 
-// ProcessWithTools 使用Tool Call处理玩家输入
+// Process 处理玩家输入，支持Tool Call
 // 实现完整的 Agentic Loop：调用LLM -> 执行工具 -> 反馈结果 -> 循环
-func (e *Engine) ProcessWithTools(ctx context.Context, input string) (*DMResponse, error) {
+func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error) {
 	e.state.IncrementTurn()
 
 	// 1. 获取工具定义并转换为 LLM 格式
