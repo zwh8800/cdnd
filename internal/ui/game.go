@@ -231,11 +231,11 @@ func (m *GameModel) View() string {
 
 	// 主输出区域
 	outputHeight := m.windowHeight - m.statusBarHeight - 4 // 预留输入栏、边框等
-	b.WriteString(m.renderOutput(outputHeight))
+	b.WriteString(m.renderStoryBox(outputHeight))
 	b.WriteString("\n")
 
 	// 输入栏
-	b.WriteString(m.renderInput())
+	b.WriteString(m.renderInputBox())
 
 	return b.String()
 }
@@ -254,19 +254,15 @@ func (m *GameModel) renderStatusBar() string {
 	}
 }
 
-// renderOutput 渲染输出区域
-func (m *GameModel) renderOutput(height int) string {
-	if len(m.lines) == 0 {
-		return GameStyles.Box.Height(height).Render("欢迎来到D&D冒险！输入你的行动开始游戏。")
-	}
-
+// renderStoryBox 渲染剧情框
+func (m *GameModel) renderStoryBox(height int) string {
 	// 直接使用 viewport 的 View() 方法
 	// 注意：内容已经在 Update 中通过 updateViewportContent 设置
 	return GameStyles.Box.Height(height).Render(m.viewport.View())
 }
 
-// renderInput 渲染输入栏
-func (m *GameModel) renderInput() string {
+// renderInputBox 渲染输入栏
+func (m *GameModel) renderInputBox() string {
 	if m.loading {
 		// Braille 旋转器
 		braille := brailleFrames[m.loadingFrame]

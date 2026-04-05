@@ -446,63 +446,6 @@ type StreamChunk struct {
 	Error   error
 }
 
-// ProcessPlayerInputStream 流式处理玩家输入
-func (e *Engine) ProcessPlayerInputStream(ctx context.Context, input string) (<-chan StreamChunk, error) {
-	e.state.IncrementTurn()
-
-	gameCtx := &prompt.GameContext{
-		Phase:         e.state.GetPhase().String(),
-		Character:     e.state.GetCharacter(),
-		CurrentScene:  e.state.GetCurrentScene(),
-		DMContext:     e.state.DMContext,
-		History:       e.state.GetHistory(),
-		TurnCount:     e.state.TurnCount,
-		WorldFlags:    e.state.WorldFlags,
-		WorldCounters: e.state.WorldCounters,
-	}
-	messages := e.buildMessages(gameCtx, input)
-
-	// 调用LLM的流式生成
-	stream, err := e.llmProvider.GenerateStream(ctx, &llm.Request{Messages: messages})
-	if err != nil {
-		return nil, fmt.Errorf("LLM流式调用失败: %w", err)
-	}
-
-	// 创建输出通道
-	outputChan := make(chan StreamChunk, 100)
-
-	// 保存输入历史
-	e.state.AddHistory(llm.Message{Role: llm.RoleUser, Content: input})
-
-	// 启动goroutine处理流式响应
-	go func() {
-		defer close(outputChan)
-		var fullContent strings.Builder
-
-		for chunk := range stream {
-			if chunk.Error != nil {
-				outputChan <- StreamChunk{Error: chunk.Error}
-				return
-			}
-
-			if chunk.Done {
-				// 流式完成，解析颜色标记后保存完整响应到历史
-				coloredContent := prompt.ParseColorMarkers(fullContent.String())
-				e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: coloredContent})
-
-				outputChan <- StreamChunk{Done: true}
-				return
-			}
-
-			// 累积内容
-			fullContent.WriteString(chunk.Content)
-			outputChan <- StreamChunk{Content: chunk.Content}
-		}
-	}()
-
-	return outputChan, nil
-}
-
 // formatToolResult 格式化工具执行结果为消息内容
 func formatToolResult(result *tools.ToolResult, err error) string {
 	if err != nil {
