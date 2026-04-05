@@ -9,7 +9,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/zwh8800/cdnd/internal/game"
 	"github.com/zwh8800/cdnd/internal/save"
 )
@@ -97,17 +96,15 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case tea.KeyTab:
-			if !m.loading {
-				m.expanded = !m.expanded
-				if m.expanded {
-					m.statusBarHeight = 12
-				} else {
-					m.statusBarHeight = 2
-				}
-				m.recalculateViewport()
-				m.viewport.GotoBottom()
-				return m, nil
+			m.expanded = !m.expanded
+			if m.expanded {
+				m.statusBarHeight = 12
+			} else {
+				m.statusBarHeight = 2
 			}
+			m.recalculateViewport()
+			m.viewport.GotoBottom()
+			return m, nil
 
 		case tea.KeyEnter:
 			if m.loading {
@@ -160,43 +157,6 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
 
-	case StreamChunkMsg:
-		// 处理流式数据块
-		if msg.Error != nil {
-			m.loading = false
-			m.isStreaming = false
-			m.err = msg.Error
-			m.output = append(m.output, fmt.Sprintf("错误: %v", msg.Error))
-			m.updateViewportContent()
-			m.viewport.GotoBottom()
-			return m, tea.Batch(cmds...)
-		}
-
-		if msg.Done {
-			// 流式完成
-			m.loading = false
-			m.isStreaming = false
-			if m.streamingContent != "" {
-				m.output = append(m.output, m.streamingContent)
-			}
-			m.streamingContent = ""
-			m.updateViewportContent()
-			m.viewport.GotoBottom()
-			return m, tea.Batch(cmds...)
-		}
-
-		// 累积流式内容并继续等待下一个数据块
-		m.streamingContent += msg.Content
-		m.updateViewportContent()
-		m.viewport.GotoBottom()
-		return m, tea.Batch(append(cmds, waitForStreamChunks(msg.stream))...)
-
-	case StreamStartMsg:
-		// 开始流式输出
-		m.isStreaming = true
-		m.streamingContent = ""
-		return m, tea.Batch(append(cmds, waitForStreamChunks(msg.Stream))...)
-
 	case LoadingTickMsg:
 		// 更新加载动画帧
 		if m.loading {
@@ -222,22 +182,6 @@ func (m GameModel) processInput(input string) tea.Cmd {
 			Content:        resp.Content,
 			Phase:          resp.Phase,
 			ToolNarratives: resp.ToolNarratives,
-		}
-	}
-}
-
-// waitForStreamChunks 等待流式数据块
-func waitForStreamChunks(stream <-chan game.StreamChunk) tea.Cmd {
-	return func() tea.Msg {
-		chunk, ok := <-stream
-		if !ok {
-			return StreamChunkMsg{Done: true}
-		}
-		return StreamChunkMsg{
-			Content: chunk.Content,
-			Done:    chunk.Done,
-			Error:   chunk.Error,
-			stream:  stream,
 		}
 	}
 }
@@ -359,19 +303,6 @@ type DMResponseMsg struct {
 	Err            error
 }
 
-// StreamStartMsg 流式开始消息
-type StreamStartMsg struct {
-	Stream <-chan game.StreamChunk
-}
-
-// StreamChunkMsg 流式数据块消息
-type StreamChunkMsg struct {
-	Content string
-	Done    bool
-	Error   error
-	stream  <-chan game.StreamChunk
-}
-
 // startLoadingAnimation 启动加载动画计时器
 func startLoadingAnimation() tea.Cmd {
 	return tea.Tick(200*time.Millisecond, func(t time.Time) tea.Msg {
@@ -385,60 +316,4 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
-}
-
-// GameStyles 样式定义
-var GameStyles = struct {
-	Title          lipgloss.Style
-	StatusBar      lipgloss.Style
-	Box            lipgloss.Style
-	InputBox       lipgloss.Style
-	Highlight      lipgloss.Style
-	PanelTitle     lipgloss.Style
-	Positive       lipgloss.Style
-	Negative       lipgloss.Style
-	SpellSlot      lipgloss.Style
-	LocationName   lipgloss.Style
-	GoldText       lipgloss.Style
-	ConditionBadge lipgloss.Style
-}{
-	Title: lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#7c3aed")).
-		Padding(0, 1),
-	StatusBar: lipgloss.NewStyle().
-		Background(lipgloss.Color("#1e1e2e")).
-		Foreground(lipgloss.Color("#cdd6f4")).
-		Padding(0, 1),
-	Box: lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#45475a")).
-		Padding(0, 1),
-	InputBox: lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#89b4fa")).
-		Padding(0, 1),
-	Highlight: lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#f9e2af")),
-	PanelTitle: lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#b197fc")).
-		Padding(0, 1),
-	Positive: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#69db7c")),
-	Negative: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#ff6b6b")),
-	SpellSlot: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#9775fa")),
-	LocationName: lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#4dabf7")),
-	GoldText: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#ffd700")),
-	ConditionBadge: lipgloss.NewStyle().
-		Background(lipgloss.Color("#ffd43b")).
-		Foreground(lipgloss.Color("#000000")).
-		Bold(true).
-		Padding(0, 1),
 }

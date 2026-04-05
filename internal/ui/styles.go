@@ -117,6 +117,62 @@ var (
 	FailureStyle = lipgloss.NewStyle().
 			Foreground(DangerColor).
 			Bold(true)
+
+	// GameStyles 样式定义
+	GameStyles = struct {
+		Title          lipgloss.Style
+		StatusBar      lipgloss.Style
+		Box            lipgloss.Style
+		InputBox       lipgloss.Style
+		Highlight      lipgloss.Style
+		PanelTitle     lipgloss.Style
+		Positive       lipgloss.Style
+		Negative       lipgloss.Style
+		SpellSlot      lipgloss.Style
+		LocationName   lipgloss.Style
+		GoldText       lipgloss.Style
+		ConditionBadge lipgloss.Style
+	}{
+		Title: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#7c3aed")).
+			Padding(0, 1),
+		StatusBar: lipgloss.NewStyle().
+			Background(lipgloss.Color("#1e1e2e")).
+			Foreground(lipgloss.Color("#cdd6f4")).
+			Padding(0, 1),
+		Box: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#45475a")).
+			Padding(0, 1),
+		InputBox: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#89b4fa")).
+			Padding(0, 1),
+		Highlight: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#f9e2af")),
+		PanelTitle: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#b197fc")).
+			Padding(0, 1),
+		Positive: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#69db7c")),
+		Negative: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#ff6b6b")),
+		SpellSlot: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#9775fa")),
+		LocationName: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#4dabf7")),
+		GoldText: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#ffd700")),
+		ConditionBadge: lipgloss.NewStyle().
+			Background(lipgloss.Color("#ffd43b")).
+			Foreground(lipgloss.Color("#000000")).
+			Bold(true).
+			Padding(0, 1),
+	}
 )
 
 // FormatDiceRoll 格式化骰子结果以便显示。
