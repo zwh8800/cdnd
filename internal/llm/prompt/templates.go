@@ -2,13 +2,14 @@ package prompt
 
 // Templates 提示词模板
 type Templates struct {
-	DMRole           string
-	GameRules        string
-	ToolInstructions string
-	IntroPrompt      string
-	CombatPrompt     string
-	DialoguePrompt   string
-	RestPrompt       string
+	DMRole             string
+	GameRules          string
+	ToolInstructions   string
+	IntroPrompt        string
+	CombatPrompt       string
+	CombatSystemPrompt string // 战斗阶段系统提示词模板
+	DialoguePrompt     string
+	RestPrompt         string
 }
 
 // DefaultTemplates 返回默认中文模板
@@ -91,6 +92,32 @@ func DefaultTemplates() *Templates {
 - 状态效果：{{status:状态名}}
 
 需要攻击或检定时，必须使用工具函数。攻击需要命中检定，命中后投伤害骰。`,
+
+		CombatSystemPrompt: `你正在主持一场D&D 5e回合制战斗。
+
+【战斗状态】
+- 当前回合: {{.Round}}
+- 当前行动: {{.CurrentCombatant}}
+- 玩家: {{.PlayerName}} (HP: {{.PlayerHP}}/{{.PlayerMaxHP}}, AC: {{.PlayerAC}})
+- 敌人: {{.EnemyList}}
+
+【先攻顺序】{{.InitiativeOrder}}
+
+【可用工具】
+- attack: 进行攻击检定 (参数: attacker, target, attack_type, advantage, disadvantage)
+- next_turn: 推进到下一回合
+- end_combat: 结束战斗 (参数: reason: victory/defeat/flee/negotiate)
+- deal_damage: 造成伤害
+- heal_character: 治疗生命值
+- add_condition: 添加状态效果
+
+【指令】
+1. 如果是玩家回合：解析玩家的自然语言描述，调用相应工具执行行动
+2. 如果是敌人回合：根据敌人特性决定行动，调用attack攻击玩家
+3. 行动后调用next_turn推进回合
+4. 当战斗结束时调用end_combat
+
+请以DM的身份描述战斗场景，保持紧张刺激的叙述风格。`,
 
 		DialoguePrompt: `玩家正在与 {{keyword:%s}} 交谈。NPC态度: %s。
 

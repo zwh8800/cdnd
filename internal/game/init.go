@@ -5,15 +5,15 @@ import (
 	"strings"
 
 	"github.com/zwh8800/cdnd/internal/character"
+	"github.com/zwh8800/cdnd/internal/game/state"
 	"github.com/zwh8800/cdnd/internal/llm"
 	"github.com/zwh8800/cdnd/internal/llm/prompt"
-	"github.com/zwh8800/cdnd/internal/save"
 )
 
 // IntroSequence 游戏初始化对话序列
 type IntroSequence struct {
-	Lines []string       // 按显示顺序排列的消息行
-	Phase save.GamePhase // 当前游戏阶段
+	Lines []string        // 按显示顺序排列的消息行
+	Phase state.GamePhase // 当前游戏阶段
 }
 
 // GenerateWelcomeMessage 根据角色信息生成个性化欢迎消息

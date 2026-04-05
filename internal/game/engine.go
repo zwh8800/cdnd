@@ -13,18 +13,19 @@ import (
 	"github.com/google/uuid"
 	"github.com/zwh8800/cdnd/internal/character"
 	"github.com/zwh8800/cdnd/internal/config"
+	state2 "github.com/zwh8800/cdnd/internal/game/state"
 	"github.com/zwh8800/cdnd/internal/llm"
 	"github.com/zwh8800/cdnd/internal/llm/prompt"
+	game2 "github.com/zwh8800/cdnd/internal/quest"
 	"github.com/zwh8800/cdnd/internal/rules"
 	"github.com/zwh8800/cdnd/internal/save"
 	"github.com/zwh8800/cdnd/internal/tools"
 	"github.com/zwh8800/cdnd/internal/world"
-	"github.com/zwh8800/cdnd/pkg/dice"
 )
 
 // Engine 游戏引擎
 type Engine struct {
-	state        *State
+	state        *state2.State
 	llmProvider  llm.Provider
 	prompt       *prompt.Builder
 	rules        *rules.Engine
@@ -48,7 +49,7 @@ func NewEngine(cfg *config.Config, provider llm.Provider) (*Engine, error) {
 	}
 
 	engine := &Engine{
-		state:        NewState(),
+		state:        state2.NewState(),
 		llmProvider:  provider,
 		prompt:       prompt.NewBuilder(),
 		rules:        rules.NewEngine(),
@@ -65,22 +66,48 @@ func NewEngine(cfg *config.Config, provider llm.Provider) (*Engine, error) {
 
 // registerTools 注册所有DM工具
 func (e *Engine) registerTools() {
+	// 骰子工具
 	e.toolRegistry.Register(tools.NewRollDiceTool())
+	// 技能检定工具
 	e.toolRegistry.Register(tools.NewSkillCheckTool(e.state, e.rules))
+	// 豁免检定工具
 	e.toolRegistry.Register(tools.NewSavingThrowTool(e.state, e.rules))
+	// 造成伤害工具
 	e.toolRegistry.Register(tools.NewDealDamageTool(e.state))
+	// 治疗角色工具
 	e.toolRegistry.Register(tools.NewHealCharacterTool(e.state))
+	// 添加状态工具
 	e.toolRegistry.Register(tools.NewAddConditionTool(e.state))
+	// 移除状态工具
 	e.toolRegistry.Register(tools.NewRemoveConditionTool(e.state))
+	// 获得物品工具
 	e.toolRegistry.Register(tools.NewAddItemTool(e.state))
+	// 失去物品工具
 	e.toolRegistry.Register(tools.NewRemoveItemTool(e.state))
+	// 花费金币工具
 	e.toolRegistry.Register(tools.NewSpendGoldTool(e.state))
+	// 获得金币工具
 	e.toolRegistry.Register(tools.NewGainGoldTool(e.state))
+	// 移动到场景工具
 	e.toolRegistry.Register(tools.NewMoveToSceneTool(e.state))
+	// 生成NPC工具
 	e.toolRegistry.Register(tools.NewSpawnNPCTool(e.state))
+	// 移除NPC工具
 	e.toolRegistry.Register(tools.NewRemoveNPCTool(e.state))
+	// 设置标志工具
 	e.toolRegistry.Register(tools.NewSetFlagTool(e.state))
+	// 获取标志工具
 	e.toolRegistry.Register(tools.NewGetFlagTool(e.state))
+	// 战斗工具
+	e.toolRegistry.Register(tools.NewStartCombatTool(e.state))
+	// 攻击工具
+	e.toolRegistry.Register(tools.NewAttackTool(e.state))
+	// 下一回合工具
+	e.toolRegistry.Register(tools.NewNextTurnTool(e.state))
+	// 结束战斗工具
+	e.toolRegistry.Register(tools.NewEndCombatTool(e.state))
+	// 生成敌人工具
+	e.toolRegistry.Register(tools.NewSpawnEnemyTool(e.state))
 }
 
 // Start 开始新游戏
@@ -88,7 +115,7 @@ func (e *Engine) Start(c *character.Character) error {
 	// 不要创建新的 State 对象，而是重置现有对象
 	// 这样工具中保存的 state 引用仍然有效
 	e.state.SessionID = uuid.New().String()
-	e.state.Phase = save.PhaseIntroduction
+	e.state.Phase = state2.PhaseIntroduction
 	e.state.TurnCount = 0
 	e.state.SubTurn = 0
 	e.state.Character = c
@@ -96,7 +123,7 @@ func (e *Engine) Start(c *character.Character) error {
 	e.state.VisitedScenes = make(map[string]bool)
 	e.state.WorldFlags = make(map[string]bool)
 	e.state.WorldCounters = make(map[string]int)
-	e.state.Quests = make([]*save.QuestState, 0)
+	e.state.Quests = make([]*game2.QuestState, 0)
 	e.state.History = make([]llm.Message, 0)
 	e.state.DMContext = ""
 	e.state.Combat = nil
@@ -194,7 +221,7 @@ func (e *Engine) SaveGame(slot int) error {
 }
 
 // GetState 获取游戏状态
-func (e *Engine) GetState() *State {
+func (e *Engine) GetState() *state2.State {
 	return e.state
 }
 
@@ -211,6 +238,9 @@ func (e *Engine) GetCurrentScene() *world.Scene {
 // Process 处理玩家输入，支持Tool Call
 // 实现完整的 Agentic Loop：调用LLM -> 执行工具 -> 反馈结果 -> 循环
 func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error) {
+	if e.state.GetPhase() == state2.PhaseIntroduction {
+		e.state.SetPhase(state2.PhaseExploration)
+	}
 	e.state.IncrementTurn()
 	e.state.ClearCurrentOptions()
 
@@ -229,25 +259,43 @@ func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error)
 	}
 
 	// 2. 构建初始消息
-	gameCtx := &prompt.GameContext{
-		Phase:         e.state.GetPhase().String(),
-		Character:     e.state.GetCharacter(),
-		CurrentScene:  e.state.GetCurrentScene(),
-		DMContext:     e.state.DMContext,
-		History:       e.state.GetHistory(),
-		TurnCount:     e.state.TurnCount,
-		WorldFlags:    e.state.WorldFlags,
-		WorldCounters: e.state.WorldCounters,
+	// 根据游戏阶段选择使用主历史还是战斗历史
+	var messages []llm.Message
+	var systemPrompt string
+
+	if e.state.GetPhase() == state2.PhaseCombat && e.state.GetCombat() != nil {
+		// 战斗阶段：使用战斗专用系统提示和战斗历史
+		combat := e.state.GetCombat()
+		participants := combat.Participants
+
+		systemPrompt = e.prompt.BuildCombatSystemPrompt(combat, e.state.GetCharacter(), participants)
+		messages = append(messages, llm.Message{Role: llm.RoleSystem, Content: systemPrompt})
+		messages = append(messages, e.state.GetCombatHistory()...)
+		messages = append(messages, llm.Message{Role: llm.RoleUser, Content: input})
+	} else {
+		// 非战斗阶段：使用原有逻辑
+		gameCtx := &prompt.GameContext{
+			Phase:         e.state.GetPhase().String(),
+			Character:     e.state.GetCharacter(),
+			CurrentScene:  e.state.GetCurrentScene(),
+			DMContext:     e.state.DMContext,
+			History:       e.state.GetHistory(),
+			TurnCount:     e.state.TurnCount,
+			WorldFlags:    e.state.WorldFlags,
+			WorldCounters: e.state.WorldCounters,
+		}
+		systemPrompt = e.prompt.BuildSystemPrompt(gameCtx)
+		messages = []llm.Message{{Role: llm.RoleSystem, Content: systemPrompt}}
+		messages = append(messages, e.prompt.BuildHistoryContext(e.state.GetHistory(), 20)...)
+		messages = append(messages, llm.Message{Role: llm.RoleUser, Content: input})
 	}
-	systemPrompt := e.prompt.BuildSystemPrompt(gameCtx)
-	messages := []llm.Message{{Role: llm.RoleSystem, Content: systemPrompt}}
-	messages = append(messages, e.prompt.BuildHistoryContext(e.state.GetHistory(), 20)...)
-	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: input})
 
 	// 3. Agentic Loop (最多10次迭代)
 	const maxIterations = 10
 	var allToolCalls []tools.ToolCall
 	var allNarratives []string
+	var combatEnded bool
+	var combatEndReason string
 
 	for i := 0; i < maxIterations; i++ {
 		// 3.1 调用 LLM
@@ -263,15 +311,21 @@ func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error)
 		// 3.2 检查是否有工具调用
 		if len(resp.ToolCalls) == 0 {
 			// 没有工具调用，返回最终响应
-			e.state.AddHistory(llm.Message{Role: llm.RoleUser, Content: input})
+			if e.state.GetPhase() == state2.PhaseCombat {
+				// 战斗阶段：添加到战斗历史
+				e.state.AddCombatHistory(llm.Message{Role: llm.RoleUser, Content: input})
+				e.state.AddCombatHistory(llm.Message{Role: llm.RoleAssistant, Content: resp.Content})
+			} else {
+				// 非战斗阶段：添加到主历史
+				e.state.AddHistory(llm.Message{Role: llm.RoleUser, Content: input})
+				e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: resp.Content})
+			}
 
 			// 解析选项（仅用于提取选项列表，不改变原始内容）
 			options, _ := prompt.ParseOptions(resp.Content)
 
 			// 更新状态中的选项
 			e.state.SetCurrentOptions(options)
-
-			e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: resp.Content})
 
 			// 触发回合级自动保存（异步，不阻塞）
 			go e.triggerAutosaveByTurn()
@@ -293,6 +347,11 @@ func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error)
 		}
 		messages = append(messages, assistantMsg)
 
+		// 如果是战斗阶段，也添加到战斗历史
+		if e.state.GetPhase() == state2.PhaseCombat {
+			e.state.AddCombatHistory(assistantMsg)
+		}
+
 		// 3.4 执行所有工具调用并添加结果消息
 		for _, tc := range resp.ToolCalls {
 			// 解析参数
@@ -307,6 +366,14 @@ func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error)
 
 			// 执行工具
 			result, err := e.toolRegistry.Execute(ctx, tc.Name, args)
+
+			// 检查是否是结束战斗工具
+			if tc.Name == "end_combat" && result != nil && result.Success {
+				combatEnded = true
+				if reason, ok := args["reason"].(string); ok {
+					combatEndReason = reason
+				}
+			}
 
 			// 生成 D&D 风格叙述
 			narrative := e.generateToolNarrative(tc.Name, args, result, err)
@@ -335,6 +402,18 @@ func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error)
 				Name:       tc.Name,
 			}
 			messages = append(messages, toolMsg)
+
+			// 如果是战斗阶段，也添加到战斗历史
+			if e.state.GetPhase() == state2.PhaseCombat {
+				e.state.AddCombatHistory(toolMsg)
+			}
+		}
+	}
+
+	// 4. 如果战斗结束，生成摘要并添加到主历史
+	if combatEnded {
+		if err := e.generateAndAddCombatSummary(ctx, combatEndReason); err != nil {
+			log.Printf("生成战斗摘要失败: %v", err)
 		}
 	}
 
@@ -342,67 +421,84 @@ func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error)
 	return nil, fmt.Errorf("工具调用超过最大迭代次数 (%d)", maxIterations)
 }
 
-// RollDice 投骰子
-func (e *Engine) RollDice(notation string) (*dice.Result, error) {
-	result, err := dice.ParseAndRoll(notation)
+// generateAndAddCombatSummary 生成战斗摘要并添加到主历史
+func (e *Engine) generateAndAddCombatSummary(ctx context.Context, reason string) error {
+	combat := e.state.GetCombat()
+	if combat == nil {
+		return nil
+	}
+
+	// 获取战斗历史
+	combatHistory := e.state.GetCombatHistory()
+	if len(combatHistory) == 0 {
+		return nil
+	}
+
+	// 构建摘要请求
+	summaryPrompt := `请根据以下战斗记录，生成一段2-3句话的简洁摘要。
+重点包括：战斗结果、关键行动、值得注意的事件。
+不要包含具体的骰子数值或伤害计算细节。
+
+战斗记录：
+`
+	for _, msg := range combatHistory {
+		if msg.Content != "" {
+			summaryPrompt += fmt.Sprintf("%s: %s\n", msg.Role, msg.Content)
+		}
+	}
+	summaryPrompt += "\n请生成摘要："
+
+	// 调用LLM生成摘要
+	summaryResp, err := e.llmProvider.Generate(ctx, &llm.Request{
+		Messages: []llm.Message{
+			{Role: llm.RoleSystem, Content: "你是一个D&D战斗记录摘要生成器。"},
+			{Role: llm.RoleUser, Content: summaryPrompt},
+		},
+	})
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("生成摘要失败: %w", err)
 	}
-	return &result, nil
-}
 
-// SkillCheck 技能检定
-func (e *Engine) SkillCheck(skill character.SkillType, dc int, advantage bool) *rules.CheckResult {
-	rollType := dice.NormalRoll
-	if advantage {
-		rollType = dice.AdvantageRoll
+	summary := strings.TrimSpace(summaryResp.Content)
+
+	// 获取敌人列表
+	enemies := e.state.GetEnemies()
+	enemyNames := make([]string, 0, len(enemies))
+	for _, enemy := range enemies {
+		enemyNames = append(enemyNames, enemy.Name)
 	}
-	return e.rules.SkillCheck(e.state.GetCharacter(), skill, dc, rollType)
-}
 
-// SavingThrow 豁免检定
-func (e *Engine) SavingThrow(ability character.Ability, dc int, advantage bool) *rules.CheckResult {
-	rollType := dice.NormalRoll
-	if advantage {
-		rollType = dice.AdvantageRoll
+	// 构建结果文本
+	resultText := ""
+	switch reason {
+	case "victory":
+		resultText = "胜利"
+	case "defeat":
+		resultText = "战败"
+	case "flee":
+		resultText = "逃脱"
+	case "negotiate":
+		resultText = "谈判"
+	default:
+		resultText = "结束"
 	}
-	return e.rules.SavingThrow(e.state.GetCharacter(), ability, dc, rollType)
-}
 
-// SetPhase 设置游戏阶段
-func (e *Engine) SetPhase(phase save.GamePhase) {
-	e.state.SetPhase(phase)
-	e.events.Dispatch(Event{Type: EventPhaseChanged, Data: phase, Message: fmt.Sprintf("进入%s阶段", phase.String())})
-}
+	// 添加到主历史
+	combatSummary := fmt.Sprintf("【战斗】vs %s - %s\n%s",
+		strings.Join(enemyNames, ", "),
+		resultText,
+		summary,
+	)
 
-// SetScene 设置当前场景
-func (e *Engine) SetScene(scene *world.Scene) {
-	e.state.SetCurrentScene(scene)
-	e.events.Dispatch(Event{Type: EventSceneChanged, Target: scene.ID, Message: fmt.Sprintf("进入: %s", scene.Name)})
-}
+	e.state.AddHistory(llm.Message{
+		Role:    llm.RoleAssistant,
+		Content: combatSummary,
+	})
 
-// TakeDamage 角色受到伤害
-func (e *Engine) TakeDamage(amount int) int {
-	c := e.state.GetCharacter()
-	if c == nil {
-		return 0
-	}
-	oldHP := c.HitPoints.Current
-	c.HitPoints.TakeDamage(amount)
-	e.events.Dispatch(Event{Type: EventCharacterDamaged, Data: map[string]int{"old_hp": oldHP, "new_hp": c.HitPoints.Current, "damage": amount}, Message: fmt.Sprintf("%s 受到 %d 点伤害", c.Name, amount)})
-	return c.HitPoints.Current
-}
+	// 清空战斗历史
+	e.state.ClearCombatHistory()
 
-// Heal 角色治疗
-func (e *Engine) Heal(amount int) int {
-	c := e.state.GetCharacter()
-	if c == nil {
-		return 0
-	}
-	oldHP := c.HitPoints.Current
-	c.HitPoints.Heal(amount)
-	e.events.Dispatch(Event{Type: EventCharacterHealed, Data: map[string]int{"old_hp": oldHP, "new_hp": c.HitPoints.Current, "heal": amount}, Message: fmt.Sprintf("%s 恢复 %d 点生命值", c.Name, amount)})
-	return c.HitPoints.Current
+	return nil
 }
 
 // SubscribeEvent 订阅事件
@@ -510,17 +606,10 @@ func (e *Engine) triggerAutosaveByTurn() {
 // DMResponse DM响应
 type DMResponse struct {
 	Content        string           `json:"content"`
-	Phase          save.GamePhase   `json:"phase"`
+	Phase          state2.GamePhase `json:"phase"`
 	ToolCalls      []tools.ToolCall `json:"tool_calls,omitempty"`
 	ToolNarratives []string         `json:"tool_narratives,omitempty"` // D&D风格工具执行叙述
 	Options        []string         `json:"options,omitempty"`         // 当前可用选项
-}
-
-// StreamChunk 流式响应数据块
-type StreamChunk struct {
-	Content string
-	Done    bool
-	Error   error
 }
 
 // formatToolResult 格式化工具执行结果为消息内容

@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/zwh8800/cdnd/internal/character"
-	"github.com/zwh8800/cdnd/internal/save"
+	"github.com/zwh8800/cdnd/internal/game/state"
 )
 
 // renderStatusBarCompact 渲染单行紧凑状态栏
@@ -41,7 +41,7 @@ func (m *GameModel) renderStatusBarCompact(c *character.Character) string {
 	rightParts = append(rightParts, hpStyle.Render(hpText))
 
 	// 战斗阶段特有信息
-	if m.phase == save.PhaseCombat {
+	if m.phase == state.PhaseCombat {
 		// 动作指示器
 		actionUsed := false
 		bonusActionUsed := false
@@ -81,7 +81,7 @@ func (m *GameModel) renderStatusBarCompact(c *character.Character) string {
 		rightParts = append(rightParts, fmt.Sprintf("AC:%d", c.ArmorClass))
 
 		// 探索阶段显示位置
-		if m.phase == save.PhaseExploration {
+		if m.phase == state.PhaseExploration {
 			if scene := m.engine.GetCurrentScene(); scene != nil {
 				locName := m.abbreviateLocation(scene.Name, 6)
 				rightParts = append(rightParts, GameStyles.LocationName.Render(locName))
@@ -90,20 +90,20 @@ func (m *GameModel) renderStatusBarCompact(c *character.Character) string {
 	}
 
 	// 金币 (非战斗阶段显示)
-	if m.phase != save.PhaseCombat {
+	if m.phase != state.PhaseCombat {
 		rightParts = append(rightParts, GameStyles.GoldText.Render(fmt.Sprintf("G:%d", c.Gold)))
 	}
 
 	// 阶段名称
 	phaseColor := "#cdd6f4"
 	switch m.phase {
-	case save.PhaseCombat:
+	case state.PhaseCombat:
 		phaseColor = "#ff6b6b"
-	case save.PhaseExploration:
+	case state.PhaseExploration:
 		phaseColor = "#69db7c"
-	case save.PhaseRest:
+	case state.PhaseRest:
 		phaseColor = "#74c0fc"
-	case save.PhaseDialogue:
+	case state.PhaseDialogue:
 		phaseColor = "#ffd43b"
 	}
 	phaseStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(phaseColor)).Bold(true)

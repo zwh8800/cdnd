@@ -1,12 +1,15 @@
 package prompt
 
 import (
+	"bytes"
 	"fmt"
 	"regexp"
 	"strings"
+	"text/template"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/zwh8800/cdnd/internal/character"
+	"github.com/zwh8800/cdnd/internal/combat"
 	"github.com/zwh8800/cdnd/internal/llm"
 	"github.com/zwh8800/cdnd/internal/world"
 )
@@ -259,6 +262,100 @@ func (b *Builder) BuildRestPrompt() string {
 // BuildPlayerActionPrompt 构建玩家行动提示词
 func (b *Builder) BuildPlayerActionPrompt(action string) string {
 	return fmt.Sprintf("玩家行动: %s\n\n请描述玩家的行动结果，并在需要时调用相应的工具函数。", action)
+}
+
+// CombatContext 战斗上下文
+type CombatContext struct {
+	Round            int    // 当前回合
+	CurrentCombatant string // 当前行动者
+	PlayerName       string // 玩家名称
+	PlayerHP         int    // 玩家当前HP
+	PlayerMaxHP      int    // 玩家最大HP
+	PlayerAC         int    // 玩家AC
+	EnemyList        string // 敌人列表
+	InitiativeOrder  string // 先攻顺序
+}
+
+// BuildCombatSystemPrompt 构建战斗阶段系统提示
+func (b *Builder) BuildCombatSystemPrompt(combat *combat.CombatState, character *character.Character, participants []*combat.Combatant) string {
+	if combat == nil || character == nil {
+		return ""
+	}
+
+	// 构建敌人状态列表
+	var enemyParts []string
+	for _, p := range combat.Participants {
+		if !p.IsPlayer && p.HP > 0 {
+			enemyParts = append(enemyParts, fmt.Sprintf("%s(HP:%d/%d)", p.Name, p.HP, p.MaxHP))
+		}
+	}
+	enemyList := strings.Join(enemyParts, ", ")
+
+	// 构建先攻顺序
+	var initiativeLines []string
+	for i, entry := range combat.Initiative {
+		var name string
+		for _, p := range participants {
+			if p.ID == entry.EntityID {
+				name = p.Name
+				break
+			}
+		}
+		if name == "" {
+			continue
+		}
+		marker := ""
+		if i == combat.CurrentTurn {
+			marker = " ← 当前"
+		}
+		initiativeLines = append(initiativeLines, fmt.Sprintf("\n  %d. %s%s", i+1, name, marker))
+	}
+	initiativeOrder := strings.Join(initiativeLines, "")
+
+	// 获取当前行动者名称
+	currentCombatant := "未知"
+	if combat.CurrentTurn < len(combat.Participants) {
+		currentCombatant = combat.Participants[combat.CurrentTurn].Name
+	}
+
+	ctx := CombatContext{
+		Round:            combat.Round,
+		CurrentCombatant: currentCombatant,
+		PlayerName:       character.Name,
+		PlayerHP:         character.HitPoints.Current,
+		PlayerMaxHP:      character.HitPoints.Max,
+		PlayerAC:         character.ArmorClass,
+		EnemyList:        enemyList,
+		InitiativeOrder:  initiativeOrder,
+	}
+
+	// 使用模板渲染
+	tmpl, err := template.New("combat_system").Parse(b.templates.CombatSystemPrompt)
+	if err != nil {
+		// 如果模板解析失败，降级为原始格式
+		return b.buildCombatSystemPromptFallback(&ctx)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, ctx); err != nil {
+		return b.buildCombatSystemPromptFallback(&ctx)
+	}
+
+	return buf.String()
+}
+
+// buildCombatSystemPromptFallback 降级方案（直接格式化）
+func (b *Builder) buildCombatSystemPromptFallback(ctx *CombatContext) string {
+	return fmt.Sprintf(b.templates.CombatSystemPrompt,
+		ctx.Round,
+		ctx.CurrentCombatant,
+		ctx.PlayerName,
+		ctx.PlayerHP,
+		ctx.PlayerMaxHP,
+		ctx.PlayerAC,
+		ctx.EnemyList,
+		ctx.InitiativeOrder,
+	)
 }
 
 // TruncateHistory 截断历史记录以适应上下文限制

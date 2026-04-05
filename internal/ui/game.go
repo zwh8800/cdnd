@@ -13,8 +13,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/zwh8800/cdnd/internal/game"
+	"github.com/zwh8800/cdnd/internal/game/state"
 	"github.com/zwh8800/cdnd/internal/llm/prompt"
-	"github.com/zwh8800/cdnd/internal/save"
 )
 
 // 加载动画常量
@@ -68,7 +68,7 @@ type GameModel struct {
 	windowHeight int
 
 	// 上：状态栏相关数据
-	phase           save.GamePhase
+	phase           state.GamePhase
 	expanded        bool // 是否展开状态栏
 	statusBarHeight int  // 状态栏实际高度
 
@@ -324,7 +324,7 @@ func (m *GameModel) restoreHistory() {
 // DMResponseMsg DM响应消息
 type DMResponseMsg struct {
 	Content        string
-	Phase          save.GamePhase
+	Phase          state.GamePhase
 	ToolNarratives []string
 	Options        []string
 	Err            error
