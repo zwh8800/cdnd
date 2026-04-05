@@ -48,6 +48,10 @@ type GameModel struct {
 	// 加载动画状态
 	loadingFrame int // Braille 动画帧索引 (0-5)
 	loadingTimer int // 进度点动画帧 (0-3)
+
+	// 状态栏模式
+	expanded        bool // 是否展开状态栏
+	statusBarHeight int  // 状态栏实际高度
 }
 
 // NewGameModel 创建游戏模型
@@ -60,11 +64,12 @@ func NewGameModel(engine *game.Engine) GameModel {
 	vp.MouseWheelEnabled = true
 
 	return GameModel{
-		engine:   engine,
-		ctx:      context.Background(),
-		output:   make([]string, 0),
-		input:    ti,
-		viewport: vp,
+		engine:          engine,
+		ctx:             context.Background(),
+		output:          make([]string, 0),
+		input:           ti,
+		viewport:        vp,
+		statusBarHeight: 2,
 	}
 }
 
@@ -90,6 +95,19 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
+
+		case tea.KeyTab:
+			if !m.loading {
+				m.expanded = !m.expanded
+				if m.expanded {
+					m.statusBarHeight = 12
+				} else {
+					m.statusBarHeight = 2
+				}
+				m.recalculateViewport()
+				m.viewport.GotoBottom()
+				return m, nil
+			}
 
 		case tea.KeyEnter:
 			if m.loading {
@@ -123,32 +141,7 @@ func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.ready = true
-
-		// 计算 UI 组件高度
-		// 状态栏: 约 2 行（内容 + 换行）
-		// 输入框: 约 3 行（内容 + border）
-		// 组件间换行: 约 1 行
-		statusBarHeight := 2
-		inputBoxHeight := 3
-		separatorHeight := 1
-
-		// GameStyles.Box 有 Border(RoundedBorder) 和 Padding(0, 1)
-		// Border 占 2 行高度（上下各 1）
-		viewportHeight := m.height - statusBarHeight - inputBoxHeight - separatorHeight - 2
-		viewportWidth := m.width - 4 // 左右 border(2) + padding(2)
-
-		if viewportHeight < 1 {
-			viewportHeight = 1
-		}
-		if viewportWidth < 1 {
-			viewportWidth = 1
-		}
-
-		m.viewport.Width = viewportWidth
-		m.viewport.Height = viewportHeight
-		m.input.Width = m.width - 6
-
-		m.updateViewportContent()
+		m.recalculateViewport()
 
 	case DMResponseMsg:
 		m.loading = false
@@ -249,6 +242,31 @@ func waitForStreamChunks(stream <-chan game.StreamChunk) tea.Cmd {
 	}
 }
 
+// recalculateViewport 重新计算视口尺寸
+func (m *GameModel) recalculateViewport() {
+	// 计算 UI 组件高度
+	inputBoxHeight := 3
+	separatorHeight := 1
+
+	// GameStyles.Box 有 Border(RoundedBorder) 和 Padding(0, 1)
+	// Border 占 2 行高度（上下各 1）
+	viewportHeight := m.height - m.statusBarHeight - inputBoxHeight - separatorHeight - 2
+	viewportWidth := m.width - 4 // 左右 border(2) + padding(2)
+
+	if viewportHeight < 1 {
+		viewportHeight = 1
+	}
+	if viewportWidth < 1 {
+		viewportWidth = 1
+	}
+
+	m.viewport.Width = viewportWidth
+	m.viewport.Height = viewportHeight
+	m.input.Width = m.width - 6
+
+	m.updateViewportContent()
+}
+
 // View 渲染
 func (m GameModel) View() string {
 	if !m.ready {
@@ -262,7 +280,7 @@ func (m GameModel) View() string {
 	b.WriteString("\n")
 
 	// 主输出区域
-	outputHeight := m.height - 6 // 预留状态栏、输入栏、边框
+	outputHeight := m.height - m.statusBarHeight - 4 // 预留输入栏、边框等
 	b.WriteString(m.renderOutput(outputHeight))
 	b.WriteString("\n")
 
@@ -279,29 +297,11 @@ func (m GameModel) renderStatusBar() string {
 		return GameStyles.Title.Render("D&D CLI - 无角色")
 	}
 
-	hpStyle := lipgloss.NewStyle()
-	if c.HitPoints.Current <= c.HitPoints.Max/4 {
-		hpStyle = hpStyle.Foreground(lipgloss.Color("#ff0000"))
-	} else if c.HitPoints.Current <= c.HitPoints.Max/2 {
-		hpStyle = hpStyle.Foreground(lipgloss.Color("#ffaa00"))
+	if m.expanded {
+		return m.renderStatusBarExpanded(c)
 	} else {
-		hpStyle = hpStyle.Foreground(lipgloss.Color("#00ff00"))
+		return m.renderStatusBarCompact(c)
 	}
-
-	hpText := fmt.Sprintf("HP: %d/%d", c.HitPoints.Current, c.HitPoints.Max)
-	left := fmt.Sprintf("%s - %s %d级", c.Name, c.Race.Name, c.Level)
-	if c.HasClass() {
-		left = fmt.Sprintf("%s - %s %d级 %s", c.Name, c.Race.Name, c.Level, c.Class.Name)
-	}
-	right := fmt.Sprintf("%s | %s", hpStyle.Render(hpText), m.phase.String())
-
-	bar := lipgloss.JoinHorizontal(lipgloss.Top,
-		GameStyles.StatusBar.Render(left),
-		strings.Repeat(" ", maxInt(0, m.width-lipgloss.Width(GameStyles.StatusBar.Render(left))-lipgloss.Width(right)-2)),
-		GameStyles.StatusBar.Render(right),
-	)
-
-	return bar
 }
 
 // renderOutput 渲染输出区域
@@ -389,11 +389,18 @@ func maxInt(a, b int) int {
 
 // GameStyles 样式定义
 var GameStyles = struct {
-	Title     lipgloss.Style
-	StatusBar lipgloss.Style
-	Box       lipgloss.Style
-	InputBox  lipgloss.Style
-	Highlight lipgloss.Style
+	Title          lipgloss.Style
+	StatusBar      lipgloss.Style
+	Box            lipgloss.Style
+	InputBox       lipgloss.Style
+	Highlight      lipgloss.Style
+	PanelTitle     lipgloss.Style
+	Positive       lipgloss.Style
+	Negative       lipgloss.Style
+	SpellSlot      lipgloss.Style
+	LocationName   lipgloss.Style
+	GoldText       lipgloss.Style
+	ConditionBadge lipgloss.Style
 }{
 	Title: lipgloss.NewStyle().
 		Bold(true).
@@ -414,4 +421,24 @@ var GameStyles = struct {
 	Highlight: lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#f9e2af")),
+	PanelTitle: lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#b197fc")).
+		Padding(0, 1),
+	Positive: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#69db7c")),
+	Negative: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#ff6b6b")),
+	SpellSlot: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#9775fa")),
+	LocationName: lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#4dabf7")),
+	GoldText: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#ffd700")),
+	ConditionBadge: lipgloss.NewStyle().
+		Background(lipgloss.Color("#ffd43b")).
+		Foreground(lipgloss.Color("#000000")).
+		Bold(true).
+		Padding(0, 1),
 }

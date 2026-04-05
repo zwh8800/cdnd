@@ -55,6 +55,9 @@ type Character struct {
 	Spells              []Spell    `json:"spells,omitempty"`
 	SpellSlots          SpellSlots `json:"spell_slots,omitempty"`
 	SpellcastingAbility Ability    `json:"spellcasting_ability,omitempty"`
+
+	// 状态效果
+	Conditions []string `json:"conditions,omitempty"`
 }
 
 // NewCharacter 创建带有默认值的新角色。
@@ -182,4 +185,38 @@ func (c *Character) SetSavingThrowProficiency(ability Ability, proficient bool) 
 // HasClass 检查是否有职业
 func (c *Character) HasClass() bool {
 	return c.Class.ID != ""
+}
+
+// HasCondition 检查是否有指定状态效果
+func (c *Character) HasCondition(condition string) bool {
+	for _, cond := range c.Conditions {
+		if cond == condition {
+			return true
+		}
+	}
+	return false
+}
+
+// AddCondition 添加状态效果
+func (c *Character) AddCondition(condition string) {
+	if !c.HasCondition(condition) {
+		c.Conditions = append(c.Conditions, condition)
+	}
+}
+
+// RemoveCondition 移除状态效果
+func (c *Character) RemoveCondition(condition string) {
+	for i, cond := range c.Conditions {
+		if cond == condition {
+			c.Conditions = append(c.Conditions[:i], c.Conditions[i+1:]...)
+			return
+		}
+	}
+}
+
+// GetConditions 获取状态效果副本
+func (c *Character) GetConditions() []string {
+	result := make([]string, len(c.Conditions))
+	copy(result, c.Conditions)
+	return result
 }

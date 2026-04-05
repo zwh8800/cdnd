@@ -1,7 +1,6 @@
 package game
 
 import (
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,8 +12,6 @@ import (
 
 // State 游戏状态
 type State struct {
-	mu sync.RWMutex `json:"-"`
-
 	// 基本信息
 	SessionID string         `json:"session_id"`
 	Phase     save.GamePhase `json:"phase"`
@@ -62,36 +59,26 @@ func NewState() *State {
 
 // SetPhase 设置游戏阶段
 func (s *State) SetPhase(phase save.GamePhase) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.Phase = phase
 }
 
 // GetPhase 获取当前游戏阶段
 func (s *State) GetPhase() save.GamePhase {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 	return s.Phase
 }
 
 // SetCharacter 设置角色
 func (s *State) SetCharacter(c *character.Character) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.Character = c
 }
 
 // GetCharacter 获取角色
 func (s *State) GetCharacter() *character.Character {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 	return s.Character
 }
 
 // SetCurrentScene 设置当前场景
 func (s *State) SetCurrentScene(scene *world.Scene) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.CurrentScene = scene
 	if scene != nil {
 		s.VisitedScenes[scene.ID] = true
@@ -100,22 +87,16 @@ func (s *State) SetCurrentScene(scene *world.Scene) {
 
 // GetCurrentScene 获取当前场景
 func (s *State) GetCurrentScene() *world.Scene {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 	return s.CurrentScene
 }
 
 // AddHistory 添加对话历史
 func (s *State) AddHistory(msg llm.Message) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.History = append(s.History, msg)
 }
 
 // GetHistory 获取对话历史
 func (s *State) GetHistory() []llm.Message {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 	result := make([]llm.Message, len(s.History))
 	copy(result, s.History)
 	return result
@@ -123,58 +104,42 @@ func (s *State) GetHistory() []llm.Message {
 
 // IncrementTurn 增加回合数
 func (s *State) IncrementTurn() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.TurnCount++
 }
 
 // SetFlag 设置世界标志
 func (s *State) SetFlag(key string, value bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.WorldFlags[key] = value
 }
 
 // GetFlag 获取世界标志
 func (s *State) GetFlag(key string) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 	return s.WorldFlags[key]
 }
 
 // SetCounter 设置世界计数器
 func (s *State) SetCounter(key string, value int) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.WorldCounters[key] = value
 }
 
 // GetCounter 获取世界计数器
 func (s *State) GetCounter(key string) int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 	return s.WorldCounters[key]
 }
 
 // IncrementCounter 增加计数器值
 func (s *State) IncrementCounter(key string, delta int) int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.WorldCounters[key] += delta
 	return s.WorldCounters[key]
 }
 
 // AddQuest 添加任务
 func (s *State) AddQuest(quest *save.QuestState) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.Quests = append(s.Quests, quest)
 }
 
 // GetQuest 获取任务
 func (s *State) GetQuest(id string) *save.QuestState {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 	for _, q := range s.Quests {
 		if q.ID == id {
 			return q
@@ -185,9 +150,6 @@ func (s *State) GetQuest(id string) *save.QuestState {
 
 // StartCombat 开始战斗
 func (s *State) StartCombat(participants []*save.Combatant) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	// 按先攻排序
 	initiative := make([]save.InitiativeEntry, 0, len(participants))
 	for _, p := range participants {
@@ -214,17 +176,12 @@ func (s *State) StartCombat(participants []*save.Combatant) {
 
 // EndCombat 结束战斗
 func (s *State) EndCombat() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.Combat = nil
 	s.Phase = save.PhaseExploration
 }
 
 // NextTurn 下一回合
 func (s *State) NextTurn() *save.Combatant {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.Combat == nil || !s.Combat.Active {
 		return nil
 	}
@@ -256,9 +213,6 @@ func (s *State) NextTurn() *save.Combatant {
 
 // GetCurrentCombatant 获取当前行动的战斗参与者
 func (s *State) GetCurrentCombatant() *save.Combatant {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	if s.Combat == nil || !s.Combat.Active {
 		return nil
 	}

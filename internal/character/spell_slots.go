@@ -240,6 +240,22 @@ func GetSpellSlotsByType(casterType SpellcastingType, level int) SpellSlots {
 	}
 }
 
+// GetCasterType 根据职业 ID 获取施法类型
+func GetCasterType(classID string) SpellcastingType {
+	switch ClassType(classID) {
+	case Wizard, Cleric, Druid, Bard, Sorcerer:
+		return SpellcastingFull
+	case Paladin, Ranger:
+		return SpellcastingHalf
+	case Warlock:
+		return SpellcastingPact
+	case Fighter, Rogue: // 奥法骑士/诡术师需要子职业判断，这里简化处理
+		return SpellcastingThird
+	default:
+		return SpellcastingNone
+	}
+}
+
 // MaxSpellLevel 返回可使用的最高环阶法术
 func (s SpellSlots) MaxSpellLevel() int {
 	if s.Level9 > 0 {

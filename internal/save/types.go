@@ -97,12 +97,14 @@ type Combatant struct {
 
 // CombatState 战斗状态
 type CombatState struct {
-	Active       bool              `json:"active"`
-	Round        int               `json:"round"`
-	CurrentTurn  int               `json:"current_turn"`
-	Initiative   []InitiativeEntry `json:"initiative"`
-	Participants []*Combatant      `json:"participants"`
-	StartedAt    time.Time         `json:"started_at"`
+	Active                bool              `json:"active"`
+	Round                 int               `json:"round"`
+	CurrentTurn           int               `json:"current_turn"`
+	Initiative            []InitiativeEntry `json:"initiative"`
+	Participants          []*Combatant      `json:"participants"`
+	StartedAt             time.Time         `json:"started_at"`
+	PlayerActionUsed      bool              `json:"player_action_used"`
+	PlayerBonusActionUsed bool              `json:"player_bonus_action_used"`
 }
 
 // SaveData 存档数据

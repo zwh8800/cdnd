@@ -70,8 +70,12 @@ func (e *Engine) AbilityCheck(c *character.Character, ability character.Ability,
 
 	// 检查大成功/大失败
 	if roll.Critical == dice.CritSuccess {
+		modifier := c.Attributes.Modifier(ability)
+		result.Total = roll.Total + modifier
 		result.Success = true
 	} else if roll.Critical == dice.CritFail {
+		modifier := c.Attributes.Modifier(ability)
+		result.Total = roll.Total + modifier
 		result.Success = false
 	} else {
 		// 计算总值
@@ -105,8 +109,18 @@ func (e *Engine) SkillCheck(c *character.Character, skill character.SkillType, d
 
 	// 检查大成功/大失败
 	if roll.Critical == dice.CritSuccess {
+		modifier := c.Attributes.Modifier(skillInfo.Ability)
+		if c.HasSkillProficiency(skill) {
+			modifier += c.ProficiencyBonus
+		}
+		result.Total = roll.Total + modifier
 		result.Success = true
 	} else if roll.Critical == dice.CritFail {
+		modifier := c.Attributes.Modifier(skillInfo.Ability)
+		if c.HasSkillProficiency(skill) {
+			modifier += c.ProficiencyBonus
+		}
+		result.Total = roll.Total + modifier
 		result.Success = false
 	} else {
 		// 计算总值
@@ -139,8 +153,18 @@ func (e *Engine) SavingThrow(c *character.Character, ability character.Ability, 
 
 	// 检查大成功/大失败
 	if roll.Critical == dice.CritSuccess {
+		modifier := c.Attributes.Modifier(ability)
+		if c.HasSavingThrowProficiency(ability) {
+			modifier += c.ProficiencyBonus
+		}
+		result.Total = roll.Total + modifier
 		result.Success = true
 	} else if roll.Critical == dice.CritFail {
+		modifier := c.Attributes.Modifier(ability)
+		if c.HasSavingThrowProficiency(ability) {
+			modifier += c.ProficiencyBonus
+		}
+		result.Total = roll.Total + modifier
 		result.Success = false
 	} else {
 		// 计算总值
@@ -173,8 +197,14 @@ func (e *Engine) AttackRoll(c *character.Character, ability character.Ability, a
 
 	// 检查暴击
 	if roll.Critical == dice.CritSuccess {
+		modifier := c.Attributes.Modifier(ability)
+		modifier += c.ProficiencyBonus
+		result.Total = roll.Total + modifier
 		result.Success = true
 	} else if roll.Critical == dice.CritFail {
+		modifier := c.Attributes.Modifier(ability)
+		modifier += c.ProficiencyBonus
+		result.Total = roll.Total + modifier
 		result.Success = false
 	} else {
 		// 计算总值

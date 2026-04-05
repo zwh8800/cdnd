@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,7 +21,6 @@ import (
 
 // Engine 游戏引擎
 type Engine struct {
-	mu           sync.RWMutex
 	state        *State
 	llmProvider  llm.Provider
 	prompt       *prompt.Builder
@@ -79,11 +77,8 @@ func (e *Engine) registerTools() {
 
 // Start 开始新游戏
 func (e *Engine) Start(c *character.Character) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	// 不要创建新的 State 对象，而是重置现有对象
 	// 这样工具中保存的 state 引用仍然有效
-	e.state.mu.Lock()
 	e.state.SessionID = uuid.New().String()
 	e.state.Phase = save.PhaseIntroduction
 	e.state.TurnCount = 0
@@ -100,14 +95,11 @@ func (e *Engine) Start(c *character.Character) error {
 	e.state.CreatedAt = time.Now()
 	e.state.LastSavedAt = time.Now()
 	e.state.PlayedTime = 0
-	e.state.mu.Unlock()
 	return nil
 }
 
 // LoadGame 加载游戏
 func (e *Engine) LoadGame(slot int) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	data, err := e.save.Load(slot)
 	if err != nil {
 		return fmt.Errorf("加载存档失败: %w", err)
@@ -131,7 +123,6 @@ func (e *Engine) LoadGame(slot int) error {
 
 	// 更新现有 state 对象的字段，而不是创建新对象
 	// 这样工具中保存的 state 引用仍然有效
-	e.state.mu.Lock()
 	e.state.SessionID = data.SessionID
 	e.state.Phase = data.Phase
 	e.state.TurnCount = data.TurnCount
@@ -147,7 +138,6 @@ func (e *Engine) LoadGame(slot int) error {
 	e.state.CreatedAt = data.CreatedAt
 	e.state.LastSavedAt = data.UpdatedAt
 	e.state.PlayedTime = data.PlayTime
-	e.state.mu.Unlock()
 
 	// 验证角色是否正确加载
 	if e.state.GetCharacter() == nil {
@@ -161,8 +151,6 @@ func (e *Engine) LoadGame(slot int) error {
 
 // SaveGame 保存游戏
 func (e *Engine) SaveGame(slot int) error {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
 	data := &save.SaveData{
 		Slot:          slot,
 		SaveName:      e.state.Character.Name,
@@ -191,8 +179,6 @@ func (e *Engine) SaveGame(slot int) error {
 
 // GetState 获取游戏状态
 func (e *Engine) GetState() *State {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
 	return e.state
 }
 
@@ -208,8 +194,6 @@ func (e *Engine) GetCurrentScene() *world.Scene {
 
 // ProcessPlayerInput 处理玩家输入
 func (e *Engine) ProcessPlayerInput(ctx context.Context, input string) (*DMResponse, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	e.state.IncrementTurn()
 	gameCtx := &prompt.GameContext{
 		Phase:         e.state.GetPhase().String(),
@@ -236,8 +220,6 @@ func (e *Engine) ProcessPlayerInput(ctx context.Context, input string) (*DMRespo
 // ProcessWithTools 使用Tool Call处理玩家输入
 // 实现完整的 Agentic Loop：调用LLM -> 执行工具 -> 反馈结果 -> 循环
 func (e *Engine) ProcessWithTools(ctx context.Context, input string) (*DMResponse, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
 	e.state.IncrementTurn()
 
 	// 1. 获取工具定义并转换为 LLM 格式
@@ -466,7 +448,6 @@ type StreamChunk struct {
 
 // ProcessPlayerInputStream 流式处理玩家输入
 func (e *Engine) ProcessPlayerInputStream(ctx context.Context, input string) (<-chan StreamChunk, error) {
-	e.mu.Lock()
 	e.state.IncrementTurn()
 
 	gameCtx := &prompt.GameContext{
@@ -484,7 +465,6 @@ func (e *Engine) ProcessPlayerInputStream(ctx context.Context, input string) (<-
 	// 调用LLM的流式生成
 	stream, err := e.llmProvider.GenerateStream(ctx, &llm.Request{Messages: messages})
 	if err != nil {
-		e.mu.Unlock()
 		return nil, fmt.Errorf("LLM流式调用失败: %w", err)
 	}
 
@@ -493,7 +473,6 @@ func (e *Engine) ProcessPlayerInputStream(ctx context.Context, input string) (<-
 
 	// 保存输入历史
 	e.state.AddHistory(llm.Message{Role: llm.RoleUser, Content: input})
-	e.mu.Unlock()
 
 	// 启动goroutine处理流式响应
 	go func() {
@@ -508,10 +487,8 @@ func (e *Engine) ProcessPlayerInputStream(ctx context.Context, input string) (<-
 
 			if chunk.Done {
 				// 流式完成，解析颜色标记后保存完整响应到历史
-				e.mu.Lock()
 				coloredContent := prompt.ParseColorMarkers(fullContent.String())
 				e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: coloredContent})
-				e.mu.Unlock()
 
 				outputChan <- StreamChunk{Done: true}
 				return
