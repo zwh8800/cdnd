@@ -192,31 +192,6 @@ func (e *Engine) GetCurrentScene() *world.Scene {
 	return e.state.GetCurrentScene()
 }
 
-// ProcessPlayerInput 处理玩家输入
-func (e *Engine) ProcessPlayerInput(ctx context.Context, input string) (*DMResponse, error) {
-	e.state.IncrementTurn()
-	gameCtx := &prompt.GameContext{
-		Phase:         e.state.GetPhase().String(),
-		Character:     e.state.GetCharacter(),
-		CurrentScene:  e.state.GetCurrentScene(),
-		DMContext:     e.state.DMContext,
-		History:       e.state.GetHistory(),
-		TurnCount:     e.state.TurnCount,
-		WorldFlags:    e.state.WorldFlags,
-		WorldCounters: e.state.WorldCounters,
-	}
-	messages := e.buildMessages(gameCtx, input)
-	resp, err := e.llmProvider.Generate(ctx, &llm.Request{Messages: messages})
-	if err != nil {
-		return nil, fmt.Errorf("LLM调用失败: %w", err)
-	}
-	e.state.AddHistory(llm.Message{Role: llm.RoleUser, Content: input})
-	// 解析颜色标记，将标记转换为ANSI颜色代码
-	coloredContent := prompt.ParseColorMarkers(resp.Content)
-	e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: coloredContent})
-	return &DMResponse{Content: coloredContent, Phase: e.state.GetPhase()}, nil
-}
-
 // ProcessWithTools 使用Tool Call处理玩家输入
 // 实现完整的 Agentic Loop：调用LLM -> 执行工具 -> 反馈结果 -> 循环
 func (e *Engine) ProcessWithTools(ctx context.Context, input string) (*DMResponse, error) {

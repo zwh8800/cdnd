@@ -62,7 +62,23 @@ func NewGameModel(engine *game.Engine) *GameModel {
 
 // Init 初始化
 func (m *GameModel) Init() tea.Cmd {
-	return nil
+	// 根据历史是否为空判断是新游戏还是载入存档
+	if len(m.engine.GetState().History) == 0 {
+		// 新游戏：分两阶段初始化
+		// 阶段 1：立即显示欢迎消息（快速）
+		m.showWelcomeMessage()
+		// 阶段 2：异步触发 LLM 对话
+		// 添加初始输入到输出
+		const initPrompt = "我是谁 我在哪"
+		m.lines = append(m.lines, fmt.Sprintf(strings.Repeat("-", 50)+"\n> %s", initPrompt))
+		m.updateViewportContent()
+		m.loading = true
+		return tea.Batch(m.processInput(initPrompt), m.startLoadingAnimation())
+	} else {
+		// 载入存档：恢复历史对话
+		m.restoreHistory()
+		return nil
+	}
 }
 
 // Update 更新
@@ -155,6 +171,49 @@ func (m *GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, tea.Batch(cmds...)
+}
+
+// showWelcomeMessage 立即显示欢迎消息（快速，无 LLM 调用）
+func (m *GameModel) showWelcomeMessage() {
+	welcomeMsg, err := m.engine.ShowWelcomeMessage()
+	if err != nil {
+		m.lines = append(m.lines, fmt.Sprintf("错误: %v", err))
+		return
+	}
+
+	// 立即显示欢迎消息
+	m.lines = append(m.lines, welcomeMsg)
+	m.updateViewportContent()
+}
+
+// restoreHistory 恢复存档的对话历史到UI
+func (m *GameModel) restoreHistory() {
+	history := m.engine.GetState().History
+	if len(history) == 0 {
+		return
+	}
+
+	// 遍历历史消息，格式化后添加到 lines
+	for _, msg := range history {
+		switch msg.Role {
+		case "user":
+			// 玩家输入，添加分隔线和 "> " 前缀
+			separator := strings.Repeat("-", 50)
+			m.lines = append(m.lines, separator)
+			m.lines = append(m.lines, "> "+msg.Content)
+		case "assistant":
+			// DM响应，直接添加（已包含ANSI颜色代码）
+			m.lines = append(m.lines, msg.Content)
+		case "tool":
+			// 工具消息，跳过（不应出现在最终显示中）
+			continue
+		}
+	}
+
+	// 更新游戏阶段和视口
+	m.phase = m.engine.GetState().Phase
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
 }
 
 // DMResponseMsg DM响应消息
