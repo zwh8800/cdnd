@@ -35,7 +35,7 @@ var characterCreateCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		character := finalModel.(ui.CharacterCreationModel).GetCharacter()
+		character := finalModel.(*ui.CharacterCreationModel).GetCharacter()
 		if character == nil {
 			fmt.Println("角色创建已取消。")
 			return

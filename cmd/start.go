@@ -61,7 +61,7 @@ var startCmd = &cobra.Command{
 		}
 
 		// 获取创建的角色
-		character := finalModel.(ui.CharacterCreationModel).GetCharacter()
+		character := finalModel.(*ui.CharacterCreationModel).GetCharacter()
 		if character == nil {
 			fmt.Println("Character creation cancelled.")
 			return

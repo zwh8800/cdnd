@@ -10,7 +10,7 @@ import (
 )
 
 // renderStatusBarCompact 渲染单行紧凑状态栏
-func (m GameModel) renderStatusBarCompact(c *character.Character) string {
+func (m *GameModel) renderStatusBarCompact(c *character.Character) string {
 	// 左侧：角色信息
 	var leftParts []string
 	leftParts = append(leftParts, c.Name)
@@ -122,7 +122,7 @@ func (m GameModel) renderStatusBarCompact(c *character.Character) string {
 	rightRendered := GameStyles.StatusBar.Render(right)
 	leftWidth := lipgloss.Width(leftRendered)
 	rightWidth := lipgloss.Width(rightRendered)
-	padding := maxInt(0, m.width-leftWidth-rightWidth-2)
+	padding := max(0, m.windowWidth-leftWidth-rightWidth-2)
 
 	bar := lipgloss.JoinHorizontal(lipgloss.Top,
 		leftRendered,
@@ -134,7 +134,7 @@ func (m GameModel) renderStatusBarCompact(c *character.Character) string {
 }
 
 // abbreviateLocation 缩写位置名
-func (m GameModel) abbreviateLocation(name string, maxLen int) string {
+func (m *GameModel) abbreviateLocation(name string, maxLen int) string {
 	if len(name) <= maxLen {
 		return name
 	}
@@ -142,7 +142,7 @@ func (m GameModel) abbreviateLocation(name string, maxLen int) string {
 }
 
 // getTopSpellSlotsFraction 获取最高可用两个环阶的法术环分数 (Unicode)
-func (m GameModel) getTopSpellSlotsFraction(c *character.Character) string {
+func (m *GameModel) getTopSpellSlotsFraction(c *character.Character) string {
 	if c.SpellSlots.IsEmpty() {
 		return ""
 	}
@@ -181,7 +181,7 @@ func (m GameModel) getTopSpellSlotsFraction(c *character.Character) string {
 }
 
 // formatSpellFraction 格式化法术分数为 Unicode
-func (m GameModel) formatSpellFraction(current, max int) string {
+func (m *GameModel) formatSpellFraction(current, max int) string {
 	// Unicode 分数映射
 	fractions := map[string]string{
 		"0/1": "0", "0/2": "0", "0/3": "0", "0/4": "0",
@@ -200,7 +200,7 @@ func (m GameModel) formatSpellFraction(current, max int) string {
 }
 
 // renderStatusBarExpanded 渲染多行展开状态栏
-func (m GameModel) renderStatusBarExpanded(c *character.Character) string {
+func (m *GameModel) renderStatusBarExpanded(c *character.Character) string {
 	// 顶部栏 (紧凑信息)
 	topBar := m.renderStatusBarCompact(c)
 
@@ -214,7 +214,7 @@ func (m GameModel) renderStatusBarExpanded(c *character.Character) string {
 	}
 
 	// 根据终端宽度决定布局
-	if m.width >= 100 {
+	if m.windowWidth >= 100 {
 		// 宽终端：水平排列
 		content := lipgloss.JoinHorizontal(lipgloss.Top, panels...)
 		return topBar + "\n" + content
@@ -225,7 +225,7 @@ func (m GameModel) renderStatusBarExpanded(c *character.Character) string {
 }
 
 // renderStatPanel 渲染属性面板
-func (m GameModel) renderStatPanel(c *character.Character) string {
+func (m *GameModel) renderStatPanel(c *character.Character) string {
 	abilities := []struct {
 		name  string
 		value int
@@ -265,7 +265,7 @@ func (m GameModel) renderStatPanel(c *character.Character) string {
 }
 
 // renderEquipmentPanel 渲染装备面板
-func (m GameModel) renderEquipmentPanel(c *character.Character) string {
+func (m *GameModel) renderEquipmentPanel(c *character.Character) string {
 	var lines []string
 	lines = append(lines, GameStyles.PanelTitle.Render("── 装备 ──"))
 
@@ -294,7 +294,7 @@ func (m GameModel) renderEquipmentPanel(c *character.Character) string {
 }
 
 // renderSpellPanel 渲染法术面板
-func (m GameModel) renderSpellPanel(c *character.Character) string {
+func (m *GameModel) renderSpellPanel(c *character.Character) string {
 	var lines []string
 	lines = append(lines, GameStyles.PanelTitle.Render("── 法术 ──"))
 
@@ -351,7 +351,7 @@ func (m GameModel) renderSpellPanel(c *character.Character) string {
 }
 
 // renderConditionsPanel 渲染状态效果面板
-func (m GameModel) renderConditionsPanel(c *character.Character) string {
+func (m *GameModel) renderConditionsPanel(c *character.Character) string {
 	var lines []string
 	lines = append(lines, GameStyles.PanelTitle.Render("── 状态 ──"))
 
@@ -375,7 +375,7 @@ func (m GameModel) renderConditionsPanel(c *character.Character) string {
 }
 
 // renderLocationPanel 渲染位置/时间面板
-func (m GameModel) renderLocationPanel(c *character.Character) string {
+func (m *GameModel) renderLocationPanel(c *character.Character) string {
 	var lines []string
 	lines = append(lines, GameStyles.PanelTitle.Render("── 位置/时间 ──"))
 
@@ -406,7 +406,7 @@ func (m GameModel) renderLocationPanel(c *character.Character) string {
 }
 
 // formatPlayTime 格式化游戏时间
-func (m GameModel) formatPlayTime(seconds int) string {
+func (m *GameModel) formatPlayTime(seconds int) string {
 	hours := seconds / 3600
 	minutes := (seconds % 3600) / 60
 	if hours > 0 {

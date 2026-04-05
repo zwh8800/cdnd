@@ -72,12 +72,12 @@ type CharacterCreationModel struct {
 }
 
 // NewCharacterCreationModel 创建角色创建模型
-func NewCharacterCreationModel() CharacterCreationModel {
+func NewCharacterCreationModel() *CharacterCreationModel {
 	ti := textinput.New()
 	ti.Placeholder = "请输入角色名称"
 	ti.Focus()
 
-	return CharacterCreationModel{
+	return &CharacterCreationModel{
 		step:             StepName,
 		nameInput:        ti,
 		availableRaces:   character.GetAllRaces(),
@@ -88,12 +88,12 @@ func NewCharacterCreationModel() CharacterCreationModel {
 }
 
 // Init 初始化
-func (m CharacterCreationModel) Init() tea.Cmd {
+func (m *CharacterCreationModel) Init() tea.Cmd {
 	return nil
 }
 
 // Update 更新
-func (m CharacterCreationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *CharacterCreationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -116,7 +116,7 @@ func (m CharacterCreationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleKeyPress 处理按键
-func (m CharacterCreationModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *CharacterCreationModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyCtrlC:
 		return m, tea.Quit
@@ -138,7 +138,7 @@ func (m CharacterCreationModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.C
 }
 
 // handleEnter 处理回车
-func (m CharacterCreationModel) handleEnter() (tea.Model, tea.Cmd) {
+func (m *CharacterCreationModel) handleEnter() (tea.Model, tea.Cmd) {
 	switch m.step {
 	case StepName:
 		if m.nameInput.Value() == "" {
@@ -202,7 +202,7 @@ func (m CharacterCreationModel) handleEnter() (tea.Model, tea.Cmd) {
 }
 
 // handleDown 处理向下键
-func (m CharacterCreationModel) handleDown() int {
+func (m *CharacterCreationModel) handleDown() int {
 	var maxCursor int
 	switch m.step {
 	case StepRace:
@@ -264,7 +264,7 @@ func (m *CharacterCreationModel) initAvailableSkills() {
 }
 
 // View 渲染
-func (m CharacterCreationModel) View() string {
+func (m *CharacterCreationModel) View() string {
 	if !m.ready {
 		return "正在加载..."
 	}
@@ -282,7 +282,7 @@ func (m CharacterCreationModel) View() string {
 }
 
 // renderProgress 渲染进度
-func (m CharacterCreationModel) renderProgress() string {
+func (m *CharacterCreationModel) renderProgress() string {
 	steps := []CreationStep{StepName, StepRace, StepClass, StepAbilityScores, StepSkills, StepConfirm}
 	var items []string
 	for _, s := range steps {
@@ -298,7 +298,7 @@ func (m CharacterCreationModel) renderProgress() string {
 }
 
 // renderStep 渲染当前步骤
-func (m CharacterCreationModel) renderStep() string {
+func (m *CharacterCreationModel) renderStep() string {
 	switch m.step {
 	case StepName:
 		return m.renderNameStep()
@@ -322,7 +322,7 @@ func (m CharacterCreationModel) renderStep() string {
 }
 
 // renderNameStep 渲染名称步骤
-func (m CharacterCreationModel) renderNameStep() string {
+func (m *CharacterCreationModel) renderNameStep() string {
 	var b strings.Builder
 	b.WriteString(CreationStyles.Label.Render("请输入角色名称:"))
 	b.WriteString("\n\n")
@@ -333,7 +333,7 @@ func (m CharacterCreationModel) renderNameStep() string {
 }
 
 // renderRaceStep 渲染种族步骤
-func (m CharacterCreationModel) renderRaceStep() string {
+func (m *CharacterCreationModel) renderRaceStep() string {
 	var b strings.Builder
 	b.WriteString(CreationStyles.Label.Render("选择种族:"))
 	b.WriteString("\n\n")
@@ -350,7 +350,7 @@ func (m CharacterCreationModel) renderRaceStep() string {
 }
 
 // renderSubraceStep 渲染子种族步骤
-func (m CharacterCreationModel) renderSubraceStep() string {
+func (m *CharacterCreationModel) renderSubraceStep() string {
 	if m.race == nil {
 		return "请先选择种族"
 	}
@@ -370,7 +370,7 @@ func (m CharacterCreationModel) renderSubraceStep() string {
 }
 
 // renderClassStep 渲染职业步骤
-func (m CharacterCreationModel) renderClassStep() string {
+func (m *CharacterCreationModel) renderClassStep() string {
 	var b strings.Builder
 	b.WriteString(CreationStyles.Label.Render("选择职业:"))
 	b.WriteString("\n\n")
@@ -388,7 +388,7 @@ func (m CharacterCreationModel) renderClassStep() string {
 }
 
 // renderSubclassStep 渲染子职业步骤
-func (m CharacterCreationModel) renderSubclassStep() string {
+func (m *CharacterCreationModel) renderSubclassStep() string {
 	if m.class == nil {
 		return "请先选择职业"
 	}
@@ -408,7 +408,7 @@ func (m CharacterCreationModel) renderSubclassStep() string {
 }
 
 // renderAbilityStep 渲染属性步骤
-func (m CharacterCreationModel) renderAbilityStep() string {
+func (m *CharacterCreationModel) renderAbilityStep() string {
 	var b strings.Builder
 	b.WriteString(CreationStyles.Label.Render("分配属性点:"))
 	b.WriteString("\n\n")
@@ -435,7 +435,7 @@ func (m CharacterCreationModel) renderAbilityStep() string {
 }
 
 // renderSkillsStep 渲染技能步骤
-func (m CharacterCreationModel) renderSkillsStep() string {
+func (m *CharacterCreationModel) renderSkillsStep() string {
 	var b strings.Builder
 	b.WriteString(CreationStyles.Label.Render("选择熟练技能:"))
 	b.WriteString("\n\n")
@@ -458,7 +458,7 @@ func (m CharacterCreationModel) renderSkillsStep() string {
 }
 
 // renderConfirmStep 渲染确认步骤
-func (m CharacterCreationModel) renderConfirmStep() string {
+func (m *CharacterCreationModel) renderConfirmStep() string {
 	var b strings.Builder
 	b.WriteString(CreationStyles.Label.Render("确认角色信息:"))
 	b.WriteString("\n\n")
@@ -486,7 +486,7 @@ func (m CharacterCreationModel) renderConfirmStep() string {
 }
 
 // isSkillSelected 检查技能是否已选择
-func (m CharacterCreationModel) isSkillSelected(skill character.SkillType) bool {
+func (m *CharacterCreationModel) isSkillSelected(skill character.SkillType) bool {
 	for _, s := range m.skills {
 		if s == skill {
 			return true
@@ -521,7 +521,7 @@ var CreationStyles = struct {
 }
 
 // GetCharacter 获取创建的角色
-func (m CharacterCreationModel) GetCharacter() *character.Character {
+func (m *CharacterCreationModel) GetCharacter() *character.Character {
 	name := m.nameInput.Value()
 	if name == "" || m.race == nil || m.class == nil {
 		return nil

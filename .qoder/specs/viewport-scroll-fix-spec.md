@@ -93,7 +93,7 @@ viewportWidth := m.width - 2
 ##### 1. 修改 Update 方法结构
 
 ```go
-func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     var cmds []tea.Cmd
 
     // 始终让 viewport 处理消息（滚动、鼠标滚轮等）
@@ -194,7 +194,7 @@ case tea.WindowSizeMsg:
 #### Update 方法重构
 
 ```go
-func (m GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     var cmds []tea.Cmd
 
     // 始终让 viewport 处理消息（滚动、鼠标滚轮等）
