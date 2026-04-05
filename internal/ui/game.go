@@ -423,7 +423,26 @@ func (m *GameModel) recalculateViewport() {
 
 // updateViewportContent 更新 viewport 内容
 func (m *GameModel) updateViewportContent() {
-	content := strings.Join(m.lines, "\n")
+	// 计算 viewport 的内容宽度（减去 border 和 padding）
+	viewportWidth := m.viewport.Width
+
+	// 如果宽度小于等于 0，直接连接文本
+	if viewportWidth <= 0 {
+		content := strings.Join(m.lines, "\n")
+		m.viewport.SetContent(content)
+		return
+	}
+
+	// 使用 lipgloss 对每一行进行自动换行
+	var wrappedLines []string
+	wrapStyle := lipgloss.NewStyle().Width(viewportWidth)
+
+	for _, line := range m.lines {
+		// 对每一行应用宽度样式，lipgloss 会自动换行
+		wrappedLines = append(wrappedLines, wrapStyle.Render(line))
+	}
+
+	content := strings.Join(wrappedLines, "\n")
 	m.viewport.SetContent(content)
 }
 
