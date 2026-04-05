@@ -255,7 +255,7 @@ func (m *GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.lines = append(m.lines, narrative)
 			}
 			// 再显示DM响应内容
-			m.lines = append(m.lines, msg.Content)
+			m.lines = append(m.lines, prompt.ParseColorMarkers(msg.Content))
 			m.phase = msg.Phase
 			// 更新选项
 			m.updateOptions(msg.Options)
@@ -373,7 +373,7 @@ func (m *GameModel) updateOptions(options []string) {
 		// 构建列表项（添加"其他行动..."选项）
 		items := make([]list.Item, 0, len(options)+1)
 		for _, opt := range options {
-			items = append(items, optionItem(opt))
+			items = append(items, optionItem(prompt.ParseColorMarkers(opt)))
 		}
 		items = append(items, optionItem(otherOptionLabel))
 

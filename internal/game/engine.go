@@ -252,15 +252,12 @@ func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error)
 			// 解析选项（仅用于提取选项列表，不改变原始内容）
 			options, _ := prompt.ParseOptions(resp.Content)
 
-			// 解析颜色标记，将标记转换为ANSI颜色代码
-			coloredContent := prompt.ParseColorMarkers(resp.Content)
-
 			// 更新状态中的选项
 			e.state.SetCurrentOptions(options)
 
 			e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: resp.Content})
 			return &DMResponse{
-				Content:        coloredContent,
+				Content:        resp.Content,
 				Phase:          e.state.GetPhase(),
 				ToolCalls:      allToolCalls,
 				ToolNarratives: allNarratives,
