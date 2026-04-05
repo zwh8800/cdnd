@@ -35,10 +35,11 @@ type GameModel struct {
 	lines    []string
 
 	// 下：输入框相关数据
-	inputBox     textinput.Model
-	loadingFrame int // Braille 动画帧索引 (0-5)
-	loadingTimer int // 进度点动画帧 (0-3)
-	loading      bool
+	inputBox           textinput.Model
+	loadingFrame       int // Braille 动画帧索引 (0-5)
+	loadingTimer       int // 进度点动画帧 (0-3)
+	loading            bool
+	loadingPhraseCount int // 加载文案计数器
 }
 
 // NewGameModel 创建游戏模型
@@ -164,9 +165,9 @@ func (m *GameModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.loading {
 			m.loadingFrame = (m.loadingFrame + 1) % 6
 			m.loadingTimer = (m.loadingTimer + 1) % 4
+			m.loadingPhraseCount++ // 每次tick增加计数器
 			return m, tea.Batch(append(cmds, m.startLoadingAnimation())...)
 		}
-		// loading 已为 false，停止动画
 		return m, nil
 	}
 
@@ -329,7 +330,28 @@ func (m *GameModel) renderInputBox() string {
 		// 进度点动画
 		progressDots := strings.Repeat("·", m.loadingTimer) + strings.Repeat(" ", max(0, 3-m.loadingTimer))
 
-		loadingText := fmt.Sprintf("%s 处理中 %s", braille, progressDots)
+		// D&D风格的加载文案池
+		loadingPhrases := []string{
+			"DM正在构思剧情",
+			"骰子正在滚动",
+			"魔法正在生效",
+			"命运之轮在转动",
+			"地下城主在思考",
+			"冒险即将展开",
+			"神秘力量在涌动",
+			"故事正在编织",
+			"龙息正在酝酿",
+			"传送门正在开启",
+			"卷轴正在解读",
+			"预言水晶在闪烁",
+			"地下城迷雾在散去",
+			"英雄的命运在召唤",
+			"古老符文在发光",
+		}
+
+		// 每5帧切换一次文案，充分利用所有15个文案
+		phraseIndex := (m.loadingPhraseCount / 6) % len(loadingPhrases)
+		loadingText := fmt.Sprintf("%s %s %s", braille, loadingPhrases[phraseIndex], progressDots)
 		return GameStyles.InputBox.Render(loadingText)
 	}
 	return GameStyles.InputBox.Render(m.inputBox.View())
