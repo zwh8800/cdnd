@@ -13,6 +13,7 @@ import (
 )
 
 var loadSlot int
+var loadNoAutosave bool
 
 // loadCmd 表示加载命令。
 var loadCmd = &cobra.Command{
@@ -25,6 +26,11 @@ var loadCmd = &cobra.Command{
   cdnd load -s 3`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Get()
+
+		// 命令行选项覆盖自动保存设置
+		if loadNoAutosave {
+			cfg.Game.Autosave = false
+		}
 
 		// 获取 LLM 提供者
 		provider, err := llm.NewProvider(cfg)
@@ -39,6 +45,9 @@ var loadCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error creating game engine: %v\n", err)
 			os.Exit(1)
 		}
+
+		// 确保游戏退出时清理自动保存资源
+		defer engine.StopAutosave()
 
 		// 加载存档
 		fmt.Printf("正在从槽位 %d 加载游戏...\n", loadSlot)
@@ -55,9 +64,9 @@ var loadCmd = &cobra.Command{
 
 		// 启动游戏 TUI
 		gameModel := ui.NewGameModel(engine)
-		p := tea.NewProgram(gameModel, tea.WithAltScreen())
+		gameP := tea.NewProgram(gameModel, tea.WithAltScreen())
 
-		if _, err := p.Run(); err != nil {
+		if _, err := gameP.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error running game: %v\n", err)
 			os.Exit(1)
 		}
@@ -116,4 +125,5 @@ func init() {
 	rootCmd.AddCommand(savesCmd)
 
 	loadCmd.Flags().IntVarP(&loadSlot, "slot", "s", 1, "存档槽位编号")
+	loadCmd.Flags().BoolVar(&loadNoAutosave, "no-autosave", false, "禁用自动保存")
 }

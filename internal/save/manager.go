@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	MaxSlots       = 10
+	AutosaveSlot   = 0  // 自动保存专用槽位
+	MaxSlots       = 10 // 手动保存最大槽位数
 	SaveDirName    = "cdnd"
 	SaveSubDirName = "saves"
 	SaveFileExt    = ".json"
@@ -56,8 +57,8 @@ func NewManagerWithPath(saveDir string) (*Manager, error) {
 
 // Save 保存存档
 func (m *Manager) Save(slot int, data *SaveData) error {
-	if slot < 1 || slot > MaxSlots {
-		return fmt.Errorf("无效的存档槽位: %d (有效范围: 1-%d)", slot, MaxSlots)
+	if slot != AutosaveSlot && (slot < 1 || slot > MaxSlots) {
+		return fmt.Errorf("无效的存档槽位: %d (有效范围: 0 或 1-%d)", slot, MaxSlots)
 	}
 
 	m.mu.Lock()
@@ -87,8 +88,8 @@ func (m *Manager) Save(slot int, data *SaveData) error {
 
 // Load 加载存档
 func (m *Manager) Load(slot int) (*SaveData, error) {
-	if slot < 1 || slot > MaxSlots {
-		return nil, fmt.Errorf("无效的存档槽位: %d (有效范围: 1-%d)", slot, MaxSlots)
+	if slot != AutosaveSlot && (slot < 1 || slot > MaxSlots) {
+		return nil, fmt.Errorf("无效的存档槽位: %d (有效范围: 0 或 1-%d)", slot, MaxSlots)
 	}
 
 	m.mu.Lock()
@@ -123,8 +124,8 @@ func (m *Manager) Load(slot int) (*SaveData, error) {
 
 // Delete 删除存档
 func (m *Manager) Delete(slot int) error {
-	if slot < 1 || slot > MaxSlots {
-		return fmt.Errorf("无效的存档槽位: %d (有效范围: 1-%d)", slot, MaxSlots)
+	if slot != AutosaveSlot && (slot < 1 || slot > MaxSlots) {
+		return fmt.Errorf("无效的存档槽位: %d (有效范围: 0 或 1-%d)", slot, MaxSlots)
 	}
 
 	m.mu.Lock()
@@ -216,7 +217,7 @@ func (m *Manager) GetUsedSlots() ([]int, error) {
 
 // Exists 检查存档是否存在
 func (m *Manager) Exists(slot int) bool {
-	if slot < 1 || slot > MaxSlots {
+	if slot != AutosaveSlot && (slot < 1 || slot > MaxSlots) {
 		return false
 	}
 

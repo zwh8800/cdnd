@@ -16,6 +16,7 @@ var (
 	startSaveSlot int
 	startScenario string
 	skipCreation  bool
+	noAutosave    bool
 )
 
 // startCmd 表示开始命令。
@@ -28,6 +29,11 @@ var startCmd = &cobra.Command{
 使用 --skip-creation 可跳过角色创建（用于测试）。`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Get()
+
+		// 命令行选项覆盖自动保存设置
+		if noAutosave {
+			cfg.Game.Autosave = false
+		}
 
 		// 获取 LLM 提供者
 		provider, err := llm.NewProvider(cfg)
@@ -42,6 +48,9 @@ var startCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error creating game engine: %v\n", err)
 			os.Exit(1)
 		}
+
+		// 确保游戏退出时清理自动保存资源
+		defer engine.StopAutosave()
 
 		// 如果跳过角色创建，使用测试角色
 		if skipCreation {
@@ -86,6 +95,11 @@ var startCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error running game: %v\n", err)
 			os.Exit(1)
 		}
+
+		// 游戏结束后保存
+		if err := engine.SaveGame(startSaveSlot); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to save game: %v\n", err)
+		}
 	},
 }
 
@@ -95,4 +109,5 @@ func init() {
 	startCmd.Flags().IntVarP(&startSaveSlot, "save-slot", "s", 1, "存档槽位编号（1-10）")
 	startCmd.Flags().StringVarP(&startScenario, "scenario", "S", "default", "要游玩的剧本")
 	startCmd.Flags().BoolVar(&skipCreation, "skip-creation", false, "跳过角色创建（用于测试）")
+	startCmd.Flags().BoolVar(&noAutosave, "no-autosave", false, "禁用自动保存")
 }

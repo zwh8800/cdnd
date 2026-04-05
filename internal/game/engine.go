@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,6 +33,11 @@ type Engine struct {
 	toolRegistry *tools.Registry
 	events       *EventDispatcher
 	config       *config.Config
+
+	// 自动保存管理
+	autosaveCancel context.CancelFunc
+	autosaveWg     sync.WaitGroup
+	autosaveSaving atomic.Bool
 }
 
 // NewEngine 创建新的游戏引擎
@@ -95,6 +103,10 @@ func (e *Engine) Start(c *character.Character) error {
 	e.state.CreatedAt = time.Now()
 	e.state.LastSavedAt = time.Now()
 	e.state.PlayedTime = 0
+
+	// 启动自动保存
+	e.StartAutosave()
+
 	return nil
 }
 
@@ -146,6 +158,10 @@ func (e *Engine) LoadGame(slot int) error {
 
 	scenes, npcs := data.GetWorldData()
 	e.world.Import(scenes, npcs)
+
+	// 启动自动保存
+	e.StartAutosave()
+
 	return nil
 }
 
@@ -256,6 +272,10 @@ func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error)
 			e.state.SetCurrentOptions(options)
 
 			e.state.AddHistory(llm.Message{Role: llm.RoleAssistant, Content: resp.Content})
+
+			// 触发回合级自动保存（异步，不阻塞）
+			go e.triggerAutosaveByTurn()
+
 			return &DMResponse{
 				Content:        resp.Content,
 				Phase:          e.state.GetPhase(),
@@ -403,6 +423,88 @@ func (e *Engine) ExecuteTool(ctx context.Context, name string, args map[string]i
 // GetSaveSlots 获取存档槽位列表
 func (e *Engine) GetSaveSlots() ([]*save.SaveSlot, error) {
 	return e.save.ListSlots()
+}
+
+// StartAutosave 启动自动保存
+func (e *Engine) StartAutosave() {
+	if !e.config.Game.Autosave {
+		return
+	}
+
+	// 如果已经在运行，先停止
+	e.StopAutosave()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	e.autosaveCancel = cancel
+	e.autosaveWg.Add(1)
+
+	go func() {
+		defer e.autosaveWg.Done()
+		ticker := time.NewTicker(e.config.Game.AutosaveInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				e.triggerAutosave(ctx)
+			}
+		}
+	}()
+}
+
+// StopAutosave 停止自动保存
+func (e *Engine) StopAutosave() {
+	if e.autosaveCancel == nil {
+		return
+	}
+
+	e.autosaveCancel()
+	e.autosaveWg.Wait()
+	e.autosaveCancel = nil
+}
+
+// triggerAutosave 触发异步自动保存
+func (e *Engine) triggerAutosave(ctx context.Context) {
+	// 使用 CAS 防止并发保存
+	if !e.autosaveSaving.CompareAndSwap(false, true) {
+		return // 已经在保存中，跳过
+	}
+
+	e.autosaveWg.Add(1)
+
+	go func() {
+		defer e.autosaveSaving.Store(false)
+		defer e.autosaveWg.Done()
+
+		// 恢复 panic，防止崩溃
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("自动保存 panic: %v", r)
+			}
+		}()
+
+		// 检查是否已取消
+		if ctx.Err() != nil {
+			return
+		}
+
+		if err := e.SaveGame(save.AutosaveSlot); err != nil {
+			log.Printf("自动保存失败 (slot 0): %v", err)
+		}
+	}()
+}
+
+// triggerAutosaveByTurn 回合级自动保存触发器
+func (e *Engine) triggerAutosaveByTurn() {
+	if !e.config.Game.Autosave {
+		return
+	}
+
+	// 获取当前引擎的 context（使用 background 作为基础）
+	ctx := context.Background()
+	e.triggerAutosave(ctx)
 }
 
 // DMResponse DM响应
