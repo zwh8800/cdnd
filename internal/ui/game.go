@@ -456,9 +456,19 @@ func (m *GameModel) View() string {
 	b.WriteString(m.renderStatusBar())
 	b.WriteString("\n")
 
+	// 战斗面板（仅在战斗阶段显示）
+	combatPanel := m.renderCombatPanel()
+	if combatPanel != "" {
+		b.WriteString(combatPanel)
+		b.WriteString("\n")
+	}
+
 	// 主输出区域 - 根据输入模式动态计算高度
 	inputHeight := m.getInputHeight()
 	outputHeight := m.windowHeight - m.statusBarHeight - inputHeight - 1 // 1行分隔符
+	if combatPanel != "" {
+		outputHeight -= lipgloss.Height(combatPanel) + 1 // 战斗面板高度 + 1行分隔符
+	}
 	b.WriteString(m.renderStoryBox(outputHeight))
 	b.WriteString("\n")
 

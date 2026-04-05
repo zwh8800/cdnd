@@ -4,49 +4,25 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/zwh8800/cdnd/internal/combat"
+	"github.com/zwh8800/cdnd/internal/game/state"
 )
 
-// CombatPanelStyles 战斗面板样式
-var CombatPanelStyles = struct {
-	Panel       lipgloss.Style
-	Header      lipgloss.Style
-	EnemyName   lipgloss.Style
-	EnemyHP     lipgloss.Style
-	EnemyHPLow  lipgloss.Style
-	Initiative  lipgloss.Style
-	CurrentTurn lipgloss.Style
-	RoundInfo   lipgloss.Style
-	Divider     lipgloss.Style
-}{
-	Panel: lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#FF6B6B")).
-		Padding(0, 1),
-	Header: lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#FF6B6B")),
-	EnemyName: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FAFAFA")),
-	EnemyHP: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#69db7c")),
-	EnemyHPLow: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FF6B6B")),
-	Initiative: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FFD93D")),
-	CurrentTurn: lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#7D56F4")),
-	RoundInfo: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#04B575")),
-	Divider: lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#45475a")),
-}
+// renderCombatPanel 渲染战斗面板（GameModel 方法）
+func (m *GameModel) renderCombatPanel() string {
+	// 检查是否在战斗阶段
+	if m.phase != state.PhaseCombat {
+		return ""
+	}
 
-// RenderCombatPanel 渲染战斗面板
-func RenderCombatPanel(combat *combat.CombatState, width int) string {
-	if combat == nil || !combat.Active {
+	// 获取战斗状态
+	gameState := m.engine.GetState()
+	if gameState == nil || gameState.Combat == nil {
+		return ""
+	}
+
+	combat := gameState.Combat
+	if !combat.Active {
 		return ""
 	}
 
@@ -57,25 +33,25 @@ func RenderCombatPanel(combat *combat.CombatState, width int) string {
 	sections = append(sections, header)
 
 	// 敌人状态
-	enemySection := renderEnemyList(combat.Participants, width-4)
+	enemySection := m.renderEnemyList(combat.Participants)
 	if enemySection != "" {
-		sections = append(sections, CombatPanelStyles.Divider.Render(strings.Repeat("─", width-4)))
+		sections = append(sections, CombatPanelStyles.Divider.Render(strings.Repeat("─", max(0, m.windowWidth-8))))
 		sections = append(sections, enemySection)
 	}
 
 	// 先攻顺序
-	initiativeSection := renderInitiativeList(combat.Initiative, combat.CurrentTurn, combat.Participants, width-4)
+	initiativeSection := m.renderInitiativeList(combat.Initiative, combat.CurrentTurn, combat.Participants)
 	if initiativeSection != "" {
-		sections = append(sections, CombatPanelStyles.Divider.Render(strings.Repeat("─", width-4)))
+		sections = append(sections, CombatPanelStyles.Divider.Render(strings.Repeat("─", max(0, m.windowWidth-8))))
 		sections = append(sections, initiativeSection)
 	}
 
 	content := strings.Join(sections, "\n")
-	return CombatPanelStyles.Panel.Width(width).Render(content)
+	return CombatPanelStyles.Panel.Width(m.windowWidth - 4).Render(content)
 }
 
 // renderEnemyList 渲染敌人列表
-func renderEnemyList(participants []*combat.Combatant, width int) string {
+func (m *GameModel) renderEnemyList(participants []*combat.Combatant) string {
 	var enemies []*combat.Combatant
 	for _, p := range participants {
 		if !p.IsPlayer && p.HP > 0 {
@@ -109,7 +85,7 @@ func renderEnemyList(participants []*combat.Combatant, width int) string {
 }
 
 // renderInitiativeList 渲染先攻顺序
-func renderInitiativeList(initiative []combat.InitiativeEntry, currentTurn int, participants []*combat.Combatant, width int) string {
+func (m *GameModel) renderInitiativeList(initiative []combat.InitiativeEntry, currentTurn int, participants []*combat.Combatant) string {
 	if len(initiative) == 0 {
 		return ""
 	}
@@ -160,8 +136,8 @@ func renderHPBar(current, max int, length int) string {
 	return strings.Repeat("█", filled) + strings.Repeat("░", empty)
 }
 
-// GetCombatPanelHeight 获取战斗面板高度
-func GetCombatPanelHeight(combat *combat.CombatState) int {
+// getCombatPanelHeight 获取战斗面板高度
+func (m *GameModel) getCombatPanelHeight(combat *combat.CombatState) int {
 	if combat == nil || !combat.Active {
 		return 0
 	}

@@ -173,36 +173,40 @@ var (
 			Bold(true).
 			Padding(0, 1),
 	}
-)
 
-// FormatDiceRoll 格式化骰子结果以便显示。
-func FormatDiceRoll(notation string, total int, success bool) string {
-	var style lipgloss.Style
-	if success {
-		style = DiceSuccessStyle
-	} else {
-		style = DiceFailStyle
+	// CombatPanelStyles 战斗面板样式
+	CombatPanelStyles = struct {
+		Panel       lipgloss.Style
+		Header      lipgloss.Style
+		EnemyName   lipgloss.Style
+		EnemyHP     lipgloss.Style
+		EnemyHPLow  lipgloss.Style
+		Initiative  lipgloss.Style
+		CurrentTurn lipgloss.Style
+		RoundInfo   lipgloss.Style
+		Divider     lipgloss.Style
+	}{
+		Panel: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#FF6B6B")).
+			Padding(0, 1),
+		Header: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#FF6B6B")),
+		EnemyName: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FAFAFA")),
+		EnemyHP: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#69db7c")),
+		EnemyHPLow: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FF6B6B")),
+		Initiative: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FFD93D")),
+		CurrentTurn: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#7D56F4")),
+		RoundInfo: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#04B575")),
+		Divider: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#45475a")),
 	}
-
-	return lipgloss.JoinHorizontal(
-		lipgloss.Left,
-		DiceRollStyle.Render(notation),
-		" = ",
-		style.Render(string(rune('0'+total/10))+string(rune('0'+total%10))),
-	)
-}
-
-// FormatNarration 格式化 DM 叙述文本。
-func FormatNarration(text string) string {
-	return DMNarrationStyle.Render("DM: " + text)
-}
-
-// FormatPlayerAction 格式化玩家行动文本。
-func FormatPlayerAction(text string) string {
-	return PlayerActionStyle.Render("你: " + text)
-}
-
-// FormatCombat 格式化战斗文本。
-func FormatCombat(text string) string {
-	return CombatStyle.Render(text)
-}
+)
