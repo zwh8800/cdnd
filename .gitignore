@@ -1,2 +1,7 @@
 .idea
 cdnd
+bin/
+build/
+.DS_Store
+.idea/
+.vscode/
