@@ -1,4 +1,4 @@
-package engine
+package game_engine
 
 import (
 	"context"
@@ -23,19 +23,24 @@ import (
 	"github.com/zwh8800/cdnd/infrastructure/config"
 	"github.com/zwh8800/cdnd/infrastructure/prompt"
 	"github.com/zwh8800/cdnd/infrastructure/storage"
+	"github.com/zwh8800/cdnd/util"
 )
 
 // Engine 游戏引擎
 type Engine struct {
-	state        *state.State
-	llmProvider  llm.Provider
-	prompt       *prompt.Builder
-	rules        *rules.Engine
-	world        *world.Manager
-	save         *storage.Manager
-	toolRegistry *tools.Registry
-	events       *events.EventDispatcher
-	config       *config.Config
+	config *config.Config // 配置
+
+	state *state.State // 游戏状态
+
+	llmProvider llm.Provider     // LLM 提供者
+	prompt      *prompt.Builder  // 提示词构建器
+	rules       *rules.Engine    // 规则引擎
+	world       *world.Manager   // 世界管理器
+	save        *storage.Manager // 存档管理器
+
+	toolRegistry *tools.Registry // 工具注册表
+
+	events *events.EventDispatcher // 事件分发器
 
 	// 自动保存管理
 	autosaveCancel context.CancelFunc
@@ -643,18 +648,6 @@ func formatToolResult(result *tools.ToolResult, err error) string {
 	return sb.String()
 }
 
-// indentLines 给每一行文本添加指定的前缀缩进
-func indentLines(text string, prefix string) string {
-	lines := strings.Split(text, "\n")
-	var result strings.Builder
-	for _, line := range lines {
-		if line != "" {
-			result.WriteString(prefix + line + "\n")
-		}
-	}
-	return result.String()
-}
-
 // generateToolNarrative 生成D&D风格的工具执行叙述
 func (e *Engine) generateToolNarrative(toolName string, args map[string]interface{}, result *tools.ToolResult, execErr error) string {
 	var sb strings.Builder
@@ -675,12 +668,12 @@ func (e *Engine) generateToolNarrative(toolName string, args map[string]interfac
 	// 添加明显的工具调用标记
 	sb.WriteString("\n")
 	sb.WriteString("╔════════════════════════════════════════════════════════════════╗\n")
-	sb.WriteString(indentLines(fmt.Sprintf("⚙️  工具调用: %s", toolName), "  "))
+	sb.WriteString(util.IndentLines(fmt.Sprintf("⚙️  工具调用: %s", toolName), "  "))
 	sb.WriteString("╠════════════════════════════════════════════════════════════════╣\n")
 
 	// 生成叙述标题
 	headerText := statusMarker + getToolNarrativeHeader(toolName, toolCategory)
-	sb.WriteString(indentLines(headerText, "  "))
+	sb.WriteString(util.IndentLines(headerText, "  "))
 
 	// 根据工具类型生成不同的叙述内容
 	var narrativeContent string
@@ -697,7 +690,7 @@ func (e *Engine) generateToolNarrative(toolName string, args map[string]interfac
 		narrativeContent = generateGenericNarrative(toolName, args, result, execErr)
 	}
 
-	sb.WriteString(indentLines(narrativeContent, "  "))
+	sb.WriteString(util.IndentLines(narrativeContent, "  "))
 
 	sb.WriteString("╚════════════════════════════════════════════════════════════════╝\n")
 
@@ -984,6 +977,54 @@ func generateGenericNarrative(toolName string, args map[string]interface{}, resu
 	} else {
 		sb.WriteString(fmt.Sprintf("  └─ %s 执行完成\n", toolName))
 	}
+
+	return sb.String()
+}
+
+// ShowWelcomeMessage 生成并显示欢迎消息（快速，无 LLM 调用）
+func (e *Engine) ShowWelcomeMessage() (string, error) {
+	c := e.GetCharacter()
+	if c == nil {
+		return "", fmt.Errorf("角色数据为空")
+	}
+
+	// 生成欢迎消息并添加到历史
+	welcomeMsg := generateWelcomeMessage(c)
+	coloredWelcome := prompt.ParseColorMarkers(welcomeMsg)
+	e.state.AddHistory(llm.Message{
+		Role:    llm.RoleAssistant,
+		Content: welcomeMsg,
+	})
+
+	return coloredWelcome, nil
+}
+
+// generateWelcomeMessage 根据角色信息生成个性化欢迎消息
+func generateWelcomeMessage(c *character.Character) string {
+	var sb strings.Builder
+
+	raceName := "未知种族"
+	if c.Race.Name != "" {
+		raceName = c.Race.Name
+	}
+
+	className := "未知职业"
+	if c.Class.Name != "" {
+		className = c.Class.Name
+	}
+
+	background := "冒险者"
+	if c.Background != "" {
+		background = c.Background
+	}
+
+	sb.WriteString(fmt.Sprintf("🎲 欢迎来到 D&D 世界，{{keyword:%s}}！", c.Name))
+	sb.WriteString("\n\n")
+	sb.WriteString(fmt.Sprintf("你是一位 {{keyword:%s}} 的 {{keyword:%s}}，等级 {{number:%d}}。", raceName, className, c.Level))
+	sb.WriteString("\n")
+	sb.WriteString(fmt.Sprintf("作为一名 %s，你即将踏上一段充满未知与危险的冒险旅程。", background))
+	sb.WriteString("\n\n")
+	sb.WriteString("命运之轮已经开始，冒险的篇章等待着你来书写...")
 
 	return sb.String()
 }

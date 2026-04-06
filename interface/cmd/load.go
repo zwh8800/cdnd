@@ -6,7 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
-	"github.com/zwh8800/cdnd/application/engine"
+	"github.com/zwh8800/cdnd/application/game_engine"
 	"github.com/zwh8800/cdnd/infrastructure/config"
 	llm2 "github.com/zwh8800/cdnd/infrastructure/llm"
 	"github.com/zwh8800/cdnd/interface/ui"
@@ -40,7 +40,7 @@ var loadCmd = &cobra.Command{
 		}
 
 		// 创建游戏引擎
-		engine, err := engine.NewEngine(cfg, provider)
+		engine, err := game_engine.NewEngine(cfg, provider)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating game engine: %v\n", err)
 			os.Exit(1)
@@ -91,7 +91,7 @@ var savesCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		engine, err := engine.NewEngine(cfg, provider)
+		engine, err := game_engine.NewEngine(cfg, provider)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)

@@ -12,7 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/zwh8800/cdnd/application/engine"
+	"github.com/zwh8800/cdnd/application/game_engine"
 	"github.com/zwh8800/cdnd/domain"
 	"github.com/zwh8800/cdnd/infrastructure/prompt"
 )
@@ -60,7 +60,7 @@ func (d optionDelegate) Render(w io.Writer, m list.Model, index int, listItem li
 
 // GameModel 游戏主界面模型
 type GameModel struct {
-	engine *engine.Engine
+	engine *game_engine.Engine
 	ctx    context.Context
 
 	// UI状态
@@ -88,7 +88,7 @@ type GameModel struct {
 }
 
 // NewGameModel 创建游戏模型
-func NewGameModel(engine *engine.Engine) *GameModel {
+func NewGameModel(engine *game_engine.Engine) *GameModel {
 	ti := textinput.New()
 	ti.Prompt = "> "
 	ti.Focus()
