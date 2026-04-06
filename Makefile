@@ -16,9 +16,9 @@ GOMOD=$(GOCMD) mod
 GOFLAGS=-v
 
 # Build flags
-LDFLAGS=-ldflags "-X github.com/zwh8800/cdnd/cmd.Version=$(VERSION) \
-	-X github.com/zwh8800/cdnd/cmd.GitCommit=$(GIT_COMMIT) \
-	-X github.com/zwh8800/cdnd/cmd.BuildDate=$(BUILD_DATE)"
+LDFLAGS=-ldflags "-X github.com/zwh8800/cdnd/interface/cmd.Version=$(VERSION) \
+	-X github.com/zwh8800/cdnd/interface/cmd.GitCommit=$(GIT_COMMIT) \
+	-X github.com/zwh8800/cdnd/interface/cmd.BuildDate=$(BUILD_DATE)"
 
 # Default target
 all: clean build

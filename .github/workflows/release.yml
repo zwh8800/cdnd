@@ -1,0 +1,125 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Release
+    runs-on: ubuntu-latest
+    outputs:
+      prerelease: ${{ steps.version.outputs.PRERELEASE }}
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+          - goos: windows
+            goarch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Extract version info
+        id: version
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          GIT_COMMIT=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "GIT_COMMIT=$GIT_COMMIT" >> $GITHUB_OUTPUT
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_OUTPUT
+
+          # Detect prerelease
+          if echo "${GITHUB_REF_NAME}" | grep -qiE '(alpha|beta|rc|dev|pre)'; then
+            echo "PRERELEASE=true" >> $GITHUB_OUTPUT
+          else
+            echo "PRERELEASE=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run tests
+        run: go test -v -race ./...
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          GIT_COMMIT="${{ steps.version.outputs.GIT_COMMIT }}"
+          BUILD_DATE="${{ steps.version.outputs.BUILD_DATE }}"
+
+          LDFLAGS="-ldflags \"-X github.com/zwh8800/cdnd/interface/cmd.Version=${VERSION} \
+            -X github.com/zwh8800/cdnd/interface/cmd.GitCommit=${GIT_COMMIT} \
+            -X github.com/zwh8800/cdnd/interface/cmd.BuildDate=${BUILD_DATE}\""
+
+          EXT=""
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            EXT=".exe"
+          fi
+
+          OUTPUT="bin/cdnd-${GITHUB_REF_NAME}-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}"
+          mkdir -p bin
+          go build -v ${LDFLAGS} -o "${OUTPUT}" .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdnd-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: bin/cdnd-${{ github.ref_name }}-${{ matrix.goos }}-${{ matrix.goarch }}*
+          if-no-files-found: error
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          mkdir -p checksums
+          for dir in */; do
+            cp "${dir}"* checksums/
+          done
+          cd checksums
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: ${{ needs.build.outputs.prerelease }}
+          files: dist/checksums/*
+          generate_release_notes: true
