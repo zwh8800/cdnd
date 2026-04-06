@@ -3,13 +3,13 @@ package llm
 import (
 	"fmt"
 
-	llmd "github.com/zwh8800/cdnd/domain/llm"
+	"github.com/zwh8800/cdnd/domain/llm"
 	"github.com/zwh8800/cdnd/infrastructure/config"
 )
 
 // NewProvider 根据配置创建提供者。
 // 它使用配置中设置的默认提供者。
-func NewProvider(cfg *config.Config) (llmd.Provider, error) {
+func NewProvider(cfg *config.Config) (llm.Provider, error) {
 	if cfg == nil || cfg.LLM.DefaultProvider == "" {
 		return nil, fmt.Errorf("no default provider configured")
 	}
@@ -20,7 +20,7 @@ func NewProvider(cfg *config.Config) (llmd.Provider, error) {
 	}
 
 	// 将 config.ProviderConfig 转换为 llm.ProviderConfig
-	llmCfg := llmd.ProviderConfig{
+	llmCfg := llm.ProviderConfig{
 		APIKey:      providerCfg.APIKey,
 		Model:       providerCfg.Model,
 		BaseURL:     providerCfg.BaseURL,
@@ -48,7 +48,7 @@ func NewProviderByName(name string, cfg *config.Config) (Provider, error) {
 		return nil, fmt.Errorf("provider %s not found in config", name)
 	}
 
-	llmCfg := llmd.ProviderConfig{
+	llmCfg := llm.ProviderConfig{
 		APIKey:      providerCfg.APIKey,
 		Model:       providerCfg.Model,
 		BaseURL:     providerCfg.BaseURL,

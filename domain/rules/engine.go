@@ -1,8 +1,8 @@
 package rules
 
 import (
-	character2 "github.com/zwh8800/cdnd/domain/character"
-	dice2 "github.com/zwh8800/cdnd/domain/dice"
+	"github.com/zwh8800/cdnd/domain/character"
+	"github.com/zwh8800/cdnd/domain/dice"
 )
 
 // Engine 规则引擎
@@ -16,7 +16,7 @@ func NewEngine() *Engine {
 // CheckResult 检定结果
 type CheckResult struct {
 	Success  bool         `json:"success"`
-	Roll     dice2.Result `json:"roll"`
+	Roll     dice.Result  `json:"roll"`
 	Total    int          `json:"total"`
 	DC       int          `json:"dc"`
 	Margin   int          `json:"margin"` // 差值（正数为成功，负数为失败）
@@ -45,11 +45,11 @@ func (c CriticalType) String() string {
 }
 
 // convertCritical 转换暴击类型
-func convertCritical(c dice2.CriticalType) CriticalType {
+func convertCritical(c dice.CriticalType) CriticalType {
 	switch c {
-	case dice2.CritSuccess:
+	case dice.CritSuccess:
 		return CriticalSuccess
-	case dice2.CritFail:
+	case dice.CritFail:
 		return CriticalFailure
 	default:
 		return CriticalNone
@@ -57,23 +57,23 @@ func convertCritical(c dice2.CriticalType) CriticalType {
 }
 
 // AbilityCheck 属性检定
-func (e *Engine) AbilityCheck(c *character2.Character, ability character2.Ability, dc int, rollType dice2.RollType) *CheckResult {
+func (e *Engine) AbilityCheck(c *character.Character, ability character.Ability, dc int, rollType dice.RollType) *CheckResult {
 	result := &CheckResult{
 		DC:       dc,
 		Critical: CriticalNone,
 	}
 
 	// 投骰
-	roll := dice2.RollDice(1, 20, 0, rollType)
+	roll := dice.RollDice(1, 20, 0, rollType)
 	result.Roll = roll
 	result.Critical = convertCritical(roll.Critical)
 
 	// 检查大成功/大失败
-	if roll.Critical == dice2.CritSuccess {
+	if roll.Critical == dice.CritSuccess {
 		modifier := c.Attributes.Modifier(ability)
 		result.Total = roll.Total + modifier
 		result.Success = true
-	} else if roll.Critical == dice2.CritFail {
+	} else if roll.Critical == dice.CritFail {
 		modifier := c.Attributes.Modifier(ability)
 		result.Total = roll.Total + modifier
 		result.Success = false
@@ -89,33 +89,33 @@ func (e *Engine) AbilityCheck(c *character2.Character, ability character2.Abilit
 }
 
 // SkillCheck 技能检定
-func (e *Engine) SkillCheck(c *character2.Character, skill character2.SkillType, dc int, rollType dice2.RollType) *CheckResult {
+func (e *Engine) SkillCheck(c *character.Character, skill character.SkillType, dc int, rollType dice.RollType) *CheckResult {
 	result := &CheckResult{
 		DC:       dc,
 		Critical: CriticalNone,
 	}
 
 	// 获取技能信息
-	skillInfo, ok := character2.GetSkillInfo(skill)
+	skillInfo, ok := character.GetSkillInfo(skill)
 	if !ok {
 		result.Success = false
 		return result
 	}
 
 	// 投骰
-	roll := dice2.RollDice(1, 20, 0, rollType)
+	roll := dice.RollDice(1, 20, 0, rollType)
 	result.Roll = roll
 	result.Critical = convertCritical(roll.Critical)
 
 	// 检查大成功/大失败
-	if roll.Critical == dice2.CritSuccess {
+	if roll.Critical == dice.CritSuccess {
 		modifier := c.Attributes.Modifier(skillInfo.Ability)
 		if c.HasSkillProficiency(skill) {
 			modifier += c.ProficiencyBonus
 		}
 		result.Total = roll.Total + modifier
 		result.Success = true
-	} else if roll.Critical == dice2.CritFail {
+	} else if roll.Critical == dice.CritFail {
 		modifier := c.Attributes.Modifier(skillInfo.Ability)
 		if c.HasSkillProficiency(skill) {
 			modifier += c.ProficiencyBonus
@@ -140,26 +140,26 @@ func (e *Engine) SkillCheck(c *character2.Character, skill character2.SkillType,
 }
 
 // SavingThrow 豁免检定
-func (e *Engine) SavingThrow(c *character2.Character, ability character2.Ability, dc int, rollType dice2.RollType) *CheckResult {
+func (e *Engine) SavingThrow(c *character.Character, ability character.Ability, dc int, rollType dice.RollType) *CheckResult {
 	result := &CheckResult{
 		DC:       dc,
 		Critical: CriticalNone,
 	}
 
 	// 投骰
-	roll := dice2.RollDice(1, 20, 0, rollType)
+	roll := dice.RollDice(1, 20, 0, rollType)
 	result.Roll = roll
 	result.Critical = convertCritical(roll.Critical)
 
 	// 检查大成功/大失败
-	if roll.Critical == dice2.CritSuccess {
+	if roll.Critical == dice.CritSuccess {
 		modifier := c.Attributes.Modifier(ability)
 		if c.HasSavingThrowProficiency(ability) {
 			modifier += c.ProficiencyBonus
 		}
 		result.Total = roll.Total + modifier
 		result.Success = true
-	} else if roll.Critical == dice2.CritFail {
+	} else if roll.Critical == dice.CritFail {
 		modifier := c.Attributes.Modifier(ability)
 		if c.HasSavingThrowProficiency(ability) {
 			modifier += c.ProficiencyBonus
@@ -184,24 +184,24 @@ func (e *Engine) SavingThrow(c *character2.Character, ability character2.Ability
 }
 
 // AttackRoll 攻击检定
-func (e *Engine) AttackRoll(c *character2.Character, ability character2.Ability, ac int, rollType dice2.RollType) *CheckResult {
+func (e *Engine) AttackRoll(c *character.Character, ability character.Ability, ac int, rollType dice.RollType) *CheckResult {
 	result := &CheckResult{
 		DC:       ac,
 		Critical: CriticalNone,
 	}
 
 	// 投骰
-	roll := dice2.RollDice(1, 20, 0, rollType)
+	roll := dice.RollDice(1, 20, 0, rollType)
 	result.Roll = roll
 	result.Critical = convertCritical(roll.Critical)
 
 	// 检查暴击
-	if roll.Critical == dice2.CritSuccess {
+	if roll.Critical == dice.CritSuccess {
 		modifier := c.Attributes.Modifier(ability)
 		modifier += c.ProficiencyBonus
 		result.Total = roll.Total + modifier
 		result.Success = true
-	} else if roll.Critical == dice2.CritFail {
+	} else if roll.Critical == dice.CritFail {
 		modifier := c.Attributes.Modifier(ability)
 		modifier += c.ProficiencyBonus
 		result.Total = roll.Total + modifier
@@ -229,7 +229,7 @@ func (e *Engine) RollDamage(notation string, modifier int, critical bool) *Damag
 	}
 
 	// 投基础伤害
-	baseRoll, err := dice2.ParseAndRoll(notation)
+	baseRoll, err := dice.ParseAndRoll(notation)
 	if err != nil {
 		result.Total = modifier
 		return result
@@ -239,7 +239,7 @@ func (e *Engine) RollDamage(notation string, modifier int, critical bool) *Damag
 
 	// 暴击伤害（额外投一次伤害骰）
 	if critical {
-		extra, err := dice2.ParseAndRoll(notation)
+		extra, err := dice.ParseAndRoll(notation)
 		if err == nil {
 			result.CriticalDamage = extra.Total
 			result.Total += extra.Total
@@ -251,17 +251,17 @@ func (e *Engine) RollDamage(notation string, modifier int, critical bool) *Damag
 
 // DamageResult 伤害结果
 type DamageResult struct {
-	Base           dice2.Result `json:"base"`
-	Modifier       int          `json:"modifier"`
-	Critical       bool         `json:"critical"`
-	CriticalDamage int          `json:"critical_damage,omitempty"`
-	Total          int          `json:"total"`
+	Base           dice.Result `json:"base"`
+	Modifier       int         `json:"modifier"`
+	Critical       bool        `json:"critical"`
+	CriticalDamage int         `json:"critical_damage,omitempty"`
+	Total          int         `json:"total"`
 }
 
 // CalculateAC 计算AC
-func (e *Engine) CalculateAC(c *character2.Character) int {
+func (e *Engine) CalculateAC(c *character.Character) int {
 	// 基础AC = 10 + 敏捷调整值
-	baseAC := 10 + c.Attributes.Modifier(character2.Dexterity)
+	baseAC := 10 + c.Attributes.Modifier(character.Dexterity)
 
 	// 装备护甲会影响AC（简化处理）
 	// TODO: 根据装备计算AC

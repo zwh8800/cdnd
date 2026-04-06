@@ -12,28 +12,28 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zwh8800/cdnd/application/state"
-	tools2 "github.com/zwh8800/cdnd/application/tools"
+	"github.com/zwh8800/cdnd/application/tools"
 	"github.com/zwh8800/cdnd/domain"
 	"github.com/zwh8800/cdnd/domain/character"
 	"github.com/zwh8800/cdnd/domain/events"
 	"github.com/zwh8800/cdnd/domain/llm"
 	"github.com/zwh8800/cdnd/domain/quest"
 	"github.com/zwh8800/cdnd/domain/rules"
-	world2 "github.com/zwh8800/cdnd/domain/world"
+	"github.com/zwh8800/cdnd/domain/world"
 	"github.com/zwh8800/cdnd/infrastructure/config"
-	prompt2 "github.com/zwh8800/cdnd/infrastructure/prompt"
-	storage2 "github.com/zwh8800/cdnd/infrastructure/storage"
+	"github.com/zwh8800/cdnd/infrastructure/prompt"
+	"github.com/zwh8800/cdnd/infrastructure/storage"
 )
 
 // Engine 游戏引擎
 type Engine struct {
 	state        *state.State
 	llmProvider  llm.Provider
-	prompt       *prompt2.Builder
+	prompt       *prompt.Builder
 	rules        *rules.Engine
-	world        *world2.Manager
-	save         *storage2.Manager
-	toolRegistry *tools2.Registry
+	world        *world.Manager
+	save         *storage.Manager
+	toolRegistry *tools.Registry
 	events       *events.EventDispatcher
 	config       *config.Config
 
@@ -45,7 +45,7 @@ type Engine struct {
 
 // NewEngine 创建新的游戏引擎
 func NewEngine(cfg *config.Config, provider llm.Provider) (*Engine, error) {
-	saveManager, err := storage2.NewManager()
+	saveManager, err := storage.NewManager()
 	if err != nil {
 		return nil, fmt.Errorf("创建存档管理器失败: %w", err)
 	}
@@ -53,11 +53,11 @@ func NewEngine(cfg *config.Config, provider llm.Provider) (*Engine, error) {
 	engine := &Engine{
 		state:        state.NewState(),
 		llmProvider:  provider,
-		prompt:       prompt2.NewBuilder(),
+		prompt:       prompt.NewBuilder(),
 		rules:        rules.NewEngine(),
-		world:        world2.NewManager(),
+		world:        world.NewManager(),
 		save:         saveManager,
-		toolRegistry: tools2.NewRegistry(),
+		toolRegistry: tools.NewRegistry(),
 		events:       events.NewEventDispatcher(),
 		config:       cfg,
 	}
@@ -69,47 +69,47 @@ func NewEngine(cfg *config.Config, provider llm.Provider) (*Engine, error) {
 // registerTools 注册所有DM工具
 func (e *Engine) registerTools() {
 	// 骰子工具
-	e.toolRegistry.Register(tools2.NewRollDiceTool())
+	e.toolRegistry.Register(tools.NewRollDiceTool())
 	// 技能检定工具
-	e.toolRegistry.Register(tools2.NewSkillCheckTool(e.state, e.rules))
+	e.toolRegistry.Register(tools.NewSkillCheckTool(e.state, e.rules))
 	// 豁免检定工具
-	e.toolRegistry.Register(tools2.NewSavingThrowTool(e.state, e.rules))
+	e.toolRegistry.Register(tools.NewSavingThrowTool(e.state, e.rules))
 	// 造成伤害工具
-	e.toolRegistry.Register(tools2.NewDealDamageTool(e.state))
+	e.toolRegistry.Register(tools.NewDealDamageTool(e.state))
 	// 治疗角色工具
-	e.toolRegistry.Register(tools2.NewHealCharacterTool(e.state))
+	e.toolRegistry.Register(tools.NewHealCharacterTool(e.state))
 	// 添加状态工具
-	e.toolRegistry.Register(tools2.NewAddConditionTool(e.state))
+	e.toolRegistry.Register(tools.NewAddConditionTool(e.state))
 	// 移除状态工具
-	e.toolRegistry.Register(tools2.NewRemoveConditionTool(e.state))
+	e.toolRegistry.Register(tools.NewRemoveConditionTool(e.state))
 	// 获得物品工具
-	e.toolRegistry.Register(tools2.NewAddItemTool(e.state))
+	e.toolRegistry.Register(tools.NewAddItemTool(e.state))
 	// 失去物品工具
-	e.toolRegistry.Register(tools2.NewRemoveItemTool(e.state))
+	e.toolRegistry.Register(tools.NewRemoveItemTool(e.state))
 	// 花费金币工具
-	e.toolRegistry.Register(tools2.NewSpendGoldTool(e.state))
+	e.toolRegistry.Register(tools.NewSpendGoldTool(e.state))
 	// 获得金币工具
-	e.toolRegistry.Register(tools2.NewGainGoldTool(e.state))
+	e.toolRegistry.Register(tools.NewGainGoldTool(e.state))
 	// 移动到场景工具
-	e.toolRegistry.Register(tools2.NewMoveToSceneTool(e.state))
+	e.toolRegistry.Register(tools.NewMoveToSceneTool(e.state))
 	// 生成NPC工具
-	e.toolRegistry.Register(tools2.NewSpawnNPCTool(e.state))
+	e.toolRegistry.Register(tools.NewSpawnNPCTool(e.state))
 	// 移除NPC工具
-	e.toolRegistry.Register(tools2.NewRemoveNPCTool(e.state))
+	e.toolRegistry.Register(tools.NewRemoveNPCTool(e.state))
 	// 设置标志工具
-	e.toolRegistry.Register(tools2.NewSetFlagTool(e.state))
+	e.toolRegistry.Register(tools.NewSetFlagTool(e.state))
 	// 获取标志工具
-	e.toolRegistry.Register(tools2.NewGetFlagTool(e.state))
+	e.toolRegistry.Register(tools.NewGetFlagTool(e.state))
 	// 战斗工具
-	e.toolRegistry.Register(tools2.NewStartCombatTool(e.state))
+	e.toolRegistry.Register(tools.NewStartCombatTool(e.state))
 	// 攻击工具
-	e.toolRegistry.Register(tools2.NewAttackTool(e.state))
+	e.toolRegistry.Register(tools.NewAttackTool(e.state))
 	// 下一回合工具
-	e.toolRegistry.Register(tools2.NewNextTurnTool(e.state))
+	e.toolRegistry.Register(tools.NewNextTurnTool(e.state))
 	// 结束战斗工具
-	e.toolRegistry.Register(tools2.NewEndCombatTool(e.state))
+	e.toolRegistry.Register(tools.NewEndCombatTool(e.state))
 	// 生成敌人工具
-	e.toolRegistry.Register(tools2.NewSpawnEnemyTool(e.state))
+	e.toolRegistry.Register(tools.NewSpawnEnemyTool(e.state))
 }
 
 // Start 开始新游戏
@@ -196,7 +196,7 @@ func (e *Engine) LoadGame(slot int) error {
 
 // SaveGame 保存游戏
 func (e *Engine) SaveGame(slot int) error {
-	data := &storage2.SaveData{
+	data := &storage.SaveData{
 		Slot:          slot,
 		SaveName:      e.state.Character.Name,
 		CreatedAt:     e.state.CreatedAt,
@@ -233,7 +233,7 @@ func (e *Engine) GetCharacter() *character.Character {
 }
 
 // GetCurrentScene 获取当前场景
-func (e *Engine) GetCurrentScene() *world2.Scene {
+func (e *Engine) GetCurrentScene() *world.Scene {
 	return e.state.GetCurrentScene()
 }
 
@@ -276,7 +276,7 @@ func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error)
 		messages = append(messages, llm.Message{Role: llm.RoleUser, Content: input})
 	} else {
 		// 非战斗阶段：使用原有逻辑
-		gameCtx := &prompt2.GameContext{
+		gameCtx := &prompt.GameContext{
 			Phase:         e.state.GetPhase().String(),
 			Character:     e.state.GetCharacter(),
 			CurrentScene:  e.state.GetCurrentScene(),
@@ -294,7 +294,7 @@ func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error)
 
 	// 3. Agentic Loop (最多10次迭代)
 	const maxIterations = 10
-	var allToolCalls []tools2.ToolCall
+	var allToolCalls []tools.ToolCall
 	var allNarratives []string
 	var combatEnded bool
 	var combatEndReason string
@@ -324,7 +324,7 @@ func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error)
 			}
 
 			// 解析选项（仅用于提取选项列表，不改变原始内容）
-			options, _ := prompt2.ParseOptions(resp.Content)
+			options, _ := prompt.ParseOptions(resp.Content)
 
 			// 更新状态中的选项
 			e.state.SetCurrentOptions(options)
@@ -390,7 +390,7 @@ func (e *Engine) Process(ctx context.Context, input string) (*DMResponse, error)
 			})
 
 			// 记录工具调用
-			allToolCalls = append(allToolCalls, tools2.ToolCall{
+			allToolCalls = append(allToolCalls, tools.ToolCall{
 				ID:        tc.ID,
 				Name:      tc.Name,
 				Arguments: args,
@@ -509,17 +509,17 @@ func (e *Engine) SubscribeEvent(eventType events.EventType, handler events.Event
 }
 
 // GetToolDefinitions 获取工具定义
-func (e *Engine) GetToolDefinitions() []*tools2.ToolDefinition {
+func (e *Engine) GetToolDefinitions() []*tools.ToolDefinition {
 	return e.toolRegistry.GetToolDefinitions()
 }
 
 // ExecuteTool 执行工具
-func (e *Engine) ExecuteTool(ctx context.Context, name string, args map[string]interface{}) (*tools2.ToolResult, error) {
+func (e *Engine) ExecuteTool(ctx context.Context, name string, args map[string]interface{}) (*tools.ToolResult, error) {
 	return e.toolRegistry.Execute(ctx, name, args)
 }
 
 // GetSaveSlots 获取存档槽位列表
-func (e *Engine) GetSaveSlots() ([]*storage2.SaveSlot, error) {
+func (e *Engine) GetSaveSlots() ([]*storage.SaveSlot, error) {
 	return e.save.ListSlots()
 }
 
@@ -588,7 +588,7 @@ func (e *Engine) triggerAutosave(ctx context.Context) {
 			return
 		}
 
-		if err := e.SaveGame(storage2.AutosaveSlot); err != nil {
+		if err := e.SaveGame(storage.AutosaveSlot); err != nil {
 			log.Printf("自动保存失败 (slot 0): %v", err)
 		}
 	}()
@@ -607,15 +607,15 @@ func (e *Engine) triggerAutosaveByTurn() {
 
 // DMResponse DM响应
 type DMResponse struct {
-	Content        string            `json:"content"`
-	Phase          domain.GamePhase  `json:"phase"`
-	ToolCalls      []tools2.ToolCall `json:"tool_calls,omitempty"`
-	ToolNarratives []string          `json:"tool_narratives,omitempty"` // D&D风格工具执行叙述
-	Options        []string          `json:"options,omitempty"`         // 当前可用选项
+	Content        string           `json:"content"`
+	Phase          domain.GamePhase `json:"phase"`
+	ToolCalls      []tools.ToolCall `json:"tool_calls,omitempty"`
+	ToolNarratives []string         `json:"tool_narratives,omitempty"` // D&D风格工具执行叙述
+	Options        []string         `json:"options,omitempty"`         // 当前可用选项
 }
 
 // formatToolResult 格式化工具执行结果为消息内容
-func formatToolResult(result *tools2.ToolResult, err error) string {
+func formatToolResult(result *tools.ToolResult, err error) string {
 	if err != nil {
 		return fmt.Sprintf("工具执行错误: %s", err.Error())
 	}
@@ -656,7 +656,7 @@ func indentLines(text string, prefix string) string {
 }
 
 // generateToolNarrative 生成D&D风格的工具执行叙述
-func (e *Engine) generateToolNarrative(toolName string, args map[string]interface{}, result *tools2.ToolResult, execErr error) string {
+func (e *Engine) generateToolNarrative(toolName string, args map[string]interface{}, result *tools.ToolResult, execErr error) string {
 	var sb strings.Builder
 
 	// 获取工具类型分类
@@ -747,7 +747,7 @@ func getToolNarrativeHeader(toolName, category string) string {
 }
 
 // generateDiceNarrative 生成骰子类工具叙述
-func generateDiceNarrative(toolName string, args map[string]interface{}, result *tools2.ToolResult, execErr error) string {
+func generateDiceNarrative(toolName string, args map[string]interface{}, result *tools.ToolResult, execErr error) string {
 	var sb strings.Builder
 
 	if execErr != nil {
@@ -806,7 +806,7 @@ func generateDiceNarrative(toolName string, args map[string]interface{}, result 
 }
 
 // generateCharacterNarrative 生成角色类工具叙述
-func generateCharacterNarrative(toolName string, args map[string]interface{}, result *tools2.ToolResult, execErr error) string {
+func generateCharacterNarrative(toolName string, args map[string]interface{}, result *tools.ToolResult, execErr error) string {
 	var sb strings.Builder
 
 	if execErr != nil {
@@ -861,7 +861,7 @@ func generateCharacterNarrative(toolName string, args map[string]interface{}, re
 }
 
 // generateItemNarrative 生成物品类工具叙述
-func generateItemNarrative(toolName string, args map[string]interface{}, result *tools2.ToolResult, execErr error) string {
+func generateItemNarrative(toolName string, args map[string]interface{}, result *tools.ToolResult, execErr error) string {
 	var sb strings.Builder
 
 	if execErr != nil {
@@ -914,7 +914,7 @@ func generateItemNarrative(toolName string, args map[string]interface{}, result 
 }
 
 // generateWorldNarrative 生成世界类工具叙述
-func generateWorldNarrative(toolName string, args map[string]interface{}, result *tools2.ToolResult, execErr error) string {
+func generateWorldNarrative(toolName string, args map[string]interface{}, result *tools.ToolResult, execErr error) string {
 	var sb strings.Builder
 
 	if execErr != nil {
@@ -971,7 +971,7 @@ func generateWorldNarrative(toolName string, args map[string]interface{}, result
 }
 
 // generateGenericNarrative 生成通用工具叙述
-func generateGenericNarrative(toolName string, args map[string]interface{}, result *tools2.ToolResult, execErr error) string {
+func generateGenericNarrative(toolName string, args map[string]interface{}, result *tools.ToolResult, execErr error) string {
 	var sb strings.Builder
 
 	if execErr != nil {

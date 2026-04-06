@@ -8,7 +8,7 @@ import (
 	"github.com/zwh8800/cdnd/domain/combat"
 	"github.com/zwh8800/cdnd/domain/llm"
 	"github.com/zwh8800/cdnd/domain/quest"
-	world2 "github.com/zwh8800/cdnd/domain/world"
+	"github.com/zwh8800/cdnd/domain/world"
 )
 
 // SaveData 存档数据
@@ -29,15 +29,15 @@ type SaveData struct {
 	Character *character.Character `json:"character"`
 
 	// 世界数据
-	CurrentScene  *world2.Scene       `json:"current_scene"`
+	CurrentScene  *world.Scene        `json:"current_scene"`
 	VisitedScenes map[string]bool     `json:"visited_scenes"`
 	WorldFlags    map[string]bool     `json:"world_flags"`
 	WorldCounters map[string]int      `json:"world_counters"`
 	Quests        []*quest.QuestState `json:"quests"`
 
 	// 场景和NPC数据
-	Scenes []*world2.Scene `json:"scenes"`
-	NPCs   []*world2.NPC   `json:"npcs"`
+	Scenes []*world.Scene `json:"scenes"`
+	NPCs   []*world.NPC   `json:"npcs"`
 
 	// 对话历史
 	History   []llm.Message `json:"history"`
@@ -82,15 +82,15 @@ func NewSaveData(slot int) *SaveData {
 		WorldFlags:    make(map[string]bool),
 		WorldCounters: make(map[string]int),
 		Quests:        make([]*quest.QuestState, 0),
-		Scenes:        make([]*world2.Scene, 0),
-		NPCs:          make([]*world2.NPC, 0),
+		Scenes:        make([]*world.Scene, 0),
+		NPCs:          make([]*world.NPC, 0),
 		History:       make([]llm.Message, 0),
 		Version:       "1.0.0",
 	}
 }
 
 // GetWorldData 获取世界数据
-func (d *SaveData) GetWorldData() ([]*world2.Scene, []*world2.NPC) {
+func (d *SaveData) GetWorldData() ([]*world.Scene, []*world.NPC) {
 	return d.Scenes, d.NPCs
 }
 

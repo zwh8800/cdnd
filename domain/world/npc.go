@@ -3,7 +3,7 @@ package world
 import (
 	"time"
 
-	character2 "github.com/zwh8800/cdnd/domain/character"
+	"github.com/zwh8800/cdnd/domain/character"
 )
 
 // NPCDisposition NPC态度
@@ -82,12 +82,12 @@ type NPC struct {
 	DialogueTree []DialogueOption `json:"dialogue_tree"` // 对话选项树
 
 	// 属性信息（用于战斗NPC）
-	HP        int                          `json:"hp,omitempty"`
-	MaxHP     int                          `json:"max_hp,omitempty"`
-	AC        int                          `json:"ac,omitempty"`
-	Speed     int                          `json:"speed,omitempty"` // 移动速度（尺）
-	Abilities character2.Attributes        `json:"abilities,omitempty"`
-	Skills    map[character2.SkillType]int `json:"skills,omitempty"`
+	HP        int                         `json:"hp,omitempty"`
+	MaxHP     int                         `json:"max_hp,omitempty"`
+	AC        int                         `json:"ac,omitempty"`
+	Speed     int                         `json:"speed,omitempty"` // 移动速度（尺）
+	Abilities character.Attributes        `json:"abilities,omitempty"`
+	Skills    map[character.SkillType]int `json:"skills,omitempty"`
 
 	// 战斗相关
 	CR         float64     `json:"cr,omitempty"`         // 挑战等级

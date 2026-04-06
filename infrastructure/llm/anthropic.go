@@ -6,7 +6,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
-	llmd "github.com/zwh8800/cdnd/domain/llm"
+	"github.com/zwh8800/cdnd/domain/llm"
 )
 
 // AnthropicProvider 为 Anthropic Claude API 实现 Provider 接口。
@@ -46,13 +46,13 @@ func (p *AnthropicProvider) Generate(ctx context.Context, req *Request) (*Respon
 
 	for _, msg := range req.Messages {
 		switch msg.Role {
-		case llmd.RoleUser:
+		case llm.RoleUser:
 			messages = append(messages, p.convertUserMessage(msg))
-		case llmd.RoleAssistant:
+		case llm.RoleAssistant:
 			messages = append(messages, p.convertAssistantMessage(msg))
-		case llmd.RoleSystem:
+		case llm.RoleSystem:
 			systemPrompt = msg.Content
-		case llmd.RoleTool:
+		case llm.RoleTool:
 			messages = append(messages, p.convertToolResultMessage(msg))
 		}
 	}
@@ -146,13 +146,13 @@ func (p *AnthropicProvider) GenerateStream(ctx context.Context, req *Request) (<
 
 	for _, msg := range req.Messages {
 		switch msg.Role {
-		case llmd.RoleUser:
+		case llm.RoleUser:
 			messages = append(messages, p.convertUserMessage(msg))
-		case llmd.RoleAssistant:
+		case llm.RoleAssistant:
 			messages = append(messages, p.convertAssistantMessage(msg))
-		case llmd.RoleSystem:
+		case llm.RoleSystem:
 			systemPrompt = msg.Content
-		case llmd.RoleTool:
+		case llm.RoleTool:
 			messages = append(messages, p.convertToolResultMessage(msg))
 		}
 	}

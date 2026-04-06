@@ -8,7 +8,7 @@ import (
 	"text/template"
 
 	"github.com/charmbracelet/lipgloss"
-	character2 "github.com/zwh8800/cdnd/domain/character"
+	"github.com/zwh8800/cdnd/domain/character"
 	"github.com/zwh8800/cdnd/domain/combat"
 	"github.com/zwh8800/cdnd/domain/llm"
 	"github.com/zwh8800/cdnd/domain/world"
@@ -66,7 +66,7 @@ func NewBuilder() *Builder {
 // GameContext 游戏上下文
 type GameContext struct {
 	Phase         string // 游戏阶段名称
-	Character     *character2.Character
+	Character     *character.Character
 	CurrentScene  *world.Scene
 	DMContext     string
 	History       []llm.Message
@@ -115,7 +115,7 @@ func (b *Builder) BuildSystemPrompt(ctx *GameContext) string {
 }
 
 // BuildCharacterContext 构建角色上下文
-func (b *Builder) BuildCharacterContext(c *character2.Character) string {
+func (b *Builder) BuildCharacterContext(c *character.Character) string {
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("**%s** - ", c.Name))
@@ -133,12 +133,12 @@ func (b *Builder) BuildCharacterContext(c *character2.Character) string {
 		value int
 		mod   int
 	}{
-		{"力量", c.Attributes.Strength, c.Attributes.Modifier(character2.Strength)},
-		{"敏捷", c.Attributes.Dexterity, c.Attributes.Modifier(character2.Dexterity)},
-		{"体质", c.Attributes.Constitution, c.Attributes.Modifier(character2.Constitution)},
-		{"智力", c.Attributes.Intelligence, c.Attributes.Modifier(character2.Intelligence)},
-		{"感知", c.Attributes.Wisdom, c.Attributes.Modifier(character2.Wisdom)},
-		{"魅力", c.Attributes.Charisma, c.Attributes.Modifier(character2.Charisma)},
+		{"力量", c.Attributes.Strength, c.Attributes.Modifier(character.Strength)},
+		{"敏捷", c.Attributes.Dexterity, c.Attributes.Modifier(character.Dexterity)},
+		{"体质", c.Attributes.Constitution, c.Attributes.Modifier(character.Constitution)},
+		{"智力", c.Attributes.Intelligence, c.Attributes.Modifier(character.Intelligence)},
+		{"感知", c.Attributes.Wisdom, c.Attributes.Modifier(character.Wisdom)},
+		{"魅力", c.Attributes.Charisma, c.Attributes.Modifier(character.Charisma)},
 	}
 	for i, a := range abilities {
 		if i > 0 {
@@ -163,9 +163,9 @@ func (b *Builder) BuildCharacterContext(c *character2.Character) string {
 	// 熟练技能
 	sb.WriteString("**熟练技能**: ")
 	skillNames := make([]string, 0)
-	for _, skillType := range character2.AllSkillTypes() {
+	for _, skillType := range character.AllSkillTypes() {
 		if c.HasSkillProficiency(skillType) {
-			skillNames = append(skillNames, character2.GetSkillName(skillType))
+			skillNames = append(skillNames, character.GetSkillName(skillType))
 		}
 	}
 	if len(skillNames) > 0 {
@@ -224,7 +224,7 @@ func (b *Builder) BuildHistoryContext(history []llm.Message, maxTurns int) []llm
 }
 
 // BuildIntroPrompt 构建开场提示词
-func (b *Builder) BuildIntroPrompt(c *character2.Character) string {
+func (b *Builder) BuildIntroPrompt(c *character.Character) string {
 	var sb strings.Builder
 
 	sb.WriteString(b.templates.IntroPrompt)
@@ -277,7 +277,7 @@ type CombatContext struct {
 }
 
 // BuildCombatSystemPrompt 构建战斗阶段系统提示
-func (b *Builder) BuildCombatSystemPrompt(combat *combat.CombatState, character *character2.Character, participants []*combat.Combatant) string {
+func (b *Builder) BuildCombatSystemPrompt(combat *combat.CombatState, character *character.Character, participants []*combat.Combatant) string {
 	if combat == nil || character == nil {
 		return ""
 	}

@@ -6,7 +6,7 @@ import (
 	"io"
 
 	"github.com/sashabaranov/go-openai"
-	llmd "github.com/zwh8800/cdnd/domain/llm"
+	"github.com/zwh8800/cdnd/domain/llm"
 )
 
 // OllamaProvider 为 Ollama API 实现 Provider 接口。
@@ -238,7 +238,7 @@ func (p *OllamaProvider) convertMessage(msg Message) openai.ChatCompletionMessag
 	}
 
 	// 处理 tool 角色消息
-	if msg.Role == llmd.RoleTool {
+	if msg.Role == llm.RoleTool {
 		om.ToolCallID = msg.ToolCallID
 	}
 

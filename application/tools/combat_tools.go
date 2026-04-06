@@ -8,7 +8,7 @@ import (
 
 	"github.com/zwh8800/cdnd/domain/character"
 	"github.com/zwh8800/cdnd/domain/combat"
-	dice2 "github.com/zwh8800/cdnd/domain/dice"
+	"github.com/zwh8800/cdnd/domain/dice"
 	"github.com/zwh8800/cdnd/domain/monster"
 )
 
@@ -107,7 +107,7 @@ func (t *StartCombatTool) Execute(ctx context.Context, args map[string]interface
 		}
 
 		// 投先攻
-		initiativeRoll, _ := dice2.ParseAndRoll("1d20")
+		initiativeRoll, _ := dice.ParseAndRoll("1d20")
 		combatant.Initiative = initiativeRoll.Total + combatant.Initiative
 
 		participants = append(participants, combatant)
@@ -144,7 +144,7 @@ func (t *StartCombatTool) Execute(ctx context.Context, args map[string]interface
 	}
 
 	// 投玩家先攻
-	playerInitiativeRoll, _ := dice2.ParseAndRoll("1d20")
+	playerInitiativeRoll, _ := dice.ParseAndRoll("1d20")
 	playerCombatant.Initiative = playerInitiativeRoll.Total + playerCombatant.Initiative
 
 	participants = append(participants, playerCombatant)
@@ -288,18 +288,18 @@ func (t *AttackTool) Execute(ctx context.Context, args map[string]interface{}) (
 	}
 
 	// 投攻击骰
-	rollType := dice2.NormalRoll
+	rollType := dice.NormalRoll
 	if advantage {
-		rollType = dice2.AdvantageRoll
+		rollType = dice.AdvantageRoll
 	} else if disadvantage {
-		rollType = dice2.DisadvantageRoll
+		rollType = dice.DisadvantageRoll
 	}
-	roll := dice2.RollDice(1, 20, attackBonus, rollType)
+	roll := dice.RollDice(1, 20, attackBonus, rollType)
 
 	// 判断是否命中
 	isHit := roll.Total >= target.AC
-	isCritical := roll.Critical == dice2.CritSuccess
-	isFumble := roll.Critical == dice2.CritFail
+	isCritical := roll.Critical == dice.CritSuccess
+	isFumble := roll.Critical == dice.CritFail
 
 	// 大成功自动命中，大失败自动未命中
 	if isCritical {
@@ -334,7 +334,7 @@ func (t *AttackTool) Execute(ctx context.Context, args map[string]interface{}) (
 			if attackType == "ranged" {
 				damageType = "穿刺"
 			}
-			damageRoll, _ := dice2.ParseAndRoll(weapon)
+			damageRoll, _ := dice.ParseAndRoll(weapon)
 			damage = damageRoll.Total
 			if attackType == "ranged" {
 				damage += attacker.Abilities.Modifier(character.Dexterity)
@@ -343,7 +343,7 @@ func (t *AttackTool) Execute(ctx context.Context, args map[string]interface{}) (
 			}
 		} else {
 			// 敌人伤害：简化处理，1d6 + 力量调整值
-			damageRoll, _ := dice2.ParseAndRoll("1d6")
+			damageRoll, _ := dice.ParseAndRoll("1d6")
 			damage = damageRoll.Total + attacker.Abilities.Modifier(character.Strength)
 			if damage < 1 {
 				damage = 1
@@ -352,7 +352,7 @@ func (t *AttackTool) Execute(ctx context.Context, args map[string]interface{}) (
 
 		// 暴击时额外伤害
 		if isCritical {
-			extraRoll, _ := dice2.ParseAndRoll("1d8")
+			extraRoll, _ := dice.ParseAndRoll("1d8")
 			damage += extraRoll.Total
 			narrative += fmt.Sprintf("  ├─ 暴击伤害: %d 点%s！\n", damage, damageType)
 		} else {
@@ -618,7 +618,7 @@ func (t *SpawnEnemyTool) Execute(ctx context.Context, args map[string]interface{
 	}
 
 	// 投先攻
-	initiativeRoll, _ := dice2.ParseAndRoll("1d20")
+	initiativeRoll, _ := dice.ParseAndRoll("1d20")
 	combatant.Initiative = initiativeRoll.Total + combatant.Initiative
 
 	// 添加到战斗

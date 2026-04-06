@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	character2 "github.com/zwh8800/cdnd/domain/character"
-	dice2 "github.com/zwh8800/cdnd/domain/dice"
+	"github.com/zwh8800/cdnd/domain/character"
+	"github.com/zwh8800/cdnd/domain/dice"
 	"github.com/zwh8800/cdnd/domain/rules"
 )
 
@@ -42,15 +42,15 @@ func (t *RollDiceTool) Execute(ctx context.Context, args map[string]interface{})
 		return nil, ErrInvalidArguments
 	}
 
-	result, err := dice2.ParseAndRoll(notation)
+	result, err := dice.ParseAndRoll(notation)
 	if err != nil {
 		return nil, fmt.Errorf("投骰失败: %w", err)
 	}
 
 	criticalText := ""
-	if result.Critical == dice2.CritSuccess {
+	if result.Critical == dice.CritSuccess {
 		criticalText = " (大成功!)"
-	} else if result.Critical == dice2.CritFail {
+	} else if result.Critical == dice.CritFail {
 		criticalText = " (大失败!)"
 	}
 
@@ -113,25 +113,25 @@ func (t *SkillCheckTool) Parameters() map[string]interface{} {
 }
 
 // skillNameToType 技能名称映射
-var skillNameToType = map[string]character2.SkillType{
-	"运动": character2.Athletics,
-	"体操": character2.Acrobatics,
-	"手法": character2.SleightOfHand,
-	"隐匿": character2.Stealth,
-	"奥秘": character2.Arcana,
-	"历史": character2.History,
-	"调查": character2.Investigation,
-	"自然": character2.Nature,
-	"宗教": character2.Religion,
-	"驯兽": character2.AnimalHandling,
-	"洞察": character2.Insight,
-	"医药": character2.Medicine,
-	"察觉": character2.Perception,
-	"求生": character2.Survival,
-	"欺瞒": character2.Deception,
-	"威吓": character2.Intimidation,
-	"表演": character2.Performance,
-	"说服": character2.Persuasion,
+var skillNameToType = map[string]character.SkillType{
+	"运动": character.Athletics,
+	"体操": character.Acrobatics,
+	"手法": character.SleightOfHand,
+	"隐匿": character.Stealth,
+	"奥秘": character.Arcana,
+	"历史": character.History,
+	"调查": character.Investigation,
+	"自然": character.Nature,
+	"宗教": character.Religion,
+	"驯兽": character.AnimalHandling,
+	"洞察": character.Insight,
+	"医药": character.Medicine,
+	"察觉": character.Perception,
+	"求生": character.Survival,
+	"欺瞒": character.Deception,
+	"威吓": character.Intimidation,
+	"表演": character.Performance,
+	"说服": character.Persuasion,
 }
 
 // Execute 执行技能检定
@@ -161,9 +161,9 @@ func (t *SkillCheckTool) Execute(ctx context.Context, args map[string]interface{
 		return nil, fmt.Errorf("未知技能: %s", skillName)
 	}
 
-	rollType := dice2.NormalRoll
+	rollType := dice.NormalRoll
 	if advantage {
-		rollType = dice2.AdvantageRoll
+		rollType = dice.AdvantageRoll
 	}
 
 	result := t.rules.SkillCheck(t.state.GetCharacter(), skillType, dc, rollType)
@@ -240,13 +240,13 @@ func (t *SavingThrowTool) Parameters() map[string]interface{} {
 }
 
 // abilityNameToType 属性名称映射
-var abilityNameToType = map[string]character2.Ability{
-	"力量": character2.Strength,
-	"敏捷": character2.Dexterity,
-	"体质": character2.Constitution,
-	"智力": character2.Intelligence,
-	"感知": character2.Wisdom,
-	"魅力": character2.Charisma,
+var abilityNameToType = map[string]character.Ability{
+	"力量": character.Strength,
+	"敏捷": character.Dexterity,
+	"体质": character.Constitution,
+	"智力": character.Intelligence,
+	"感知": character.Wisdom,
+	"魅力": character.Charisma,
 }
 
 // Execute 执行豁免检定
@@ -276,9 +276,9 @@ func (t *SavingThrowTool) Execute(ctx context.Context, args map[string]interface
 		return nil, fmt.Errorf("未知属性: %s", abilityName)
 	}
 
-	rollType := dice2.NormalRoll
+	rollType := dice.NormalRoll
 	if advantage {
-		rollType = dice2.AdvantageRoll
+		rollType = dice.AdvantageRoll
 	}
 
 	result := t.rules.SavingThrow(t.state.GetCharacter(), ability, dc, rollType)
